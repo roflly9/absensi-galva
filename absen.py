@@ -5,7 +5,7 @@ import pandas as pd
 
 st.title("Sistem Absensi Galva Manado")
 
-# Membuat folder & file excel jika belum ada
+# Membuat folder penyimpanan jika belum ada
 if not os.path.exists("hasil_absen"):
     os.makedirs("hasil_absen")
 
@@ -26,7 +26,8 @@ if opsi_absen == "Hadir di Kantor":
 else:
     img_file = st.file_uploader("Upload Bukti (Foto/PDF jika ada)", type=['jpg', 'jpeg', 'png', 'pdf'])
 
-submit = st.button("Simpan Data") if opsi_absen != "Hadir di Kantor" else img_file
+# Tombol submit muncul otomatis untuk foto, atau manual untuk izin/cuti
+submit = st.button("Simpan Data") if opsi_absen != "Hadir di Kantor" else (img_file is not None)
 
 if submit and nama != "Pilih Nama":
     waktu_klik = datetime.now()
@@ -43,7 +44,7 @@ if submit and nama != "Pilih Nama":
     else:
         status = opsi_absen.upper()
 
-    # --- BAGIAN SIMPAN KE EXCEL ---
+    # --- SIMPAN KE EXCEL ---
     data_baru = {
         "Tanggal": [tgl_absen],
         "Jam": [jam_absen],
@@ -60,16 +61,29 @@ if submit and nama != "Pilih Nama":
         df_final = df_baru
 
     df_final.to_excel(excel_file, index=False)
-    # ------------------------------
 
-    # Simpan File Media (Foto/Bukti)
-    suffix = "jpg" if opsi_absen == "Hadir di Kantor" else "file"
-    nama_file = f"{status}_{nama}_{waktu_klik.strftime('%Y%m%d_%H%M%S')}.{suffix}"
+    # --- SIMPAN FILE MEDIA ---
+    ext = "jpg" if opsi_absen == "Hadir di Kantor" else "file"
+    nama_file = f"{status}_{nama}_{waktu_klik.strftime('%Y%m%d_%H%M%S')}.{ext}"
     path_simpan = os.path.join("hasil_absen", nama_file)
     
     if img_file:
         with open(path_simpan, "wb") as f:
             f.write(img_file.getbuffer())
     
-    st.success(f"Berhasil! Data {nama} tersimpan di Excel dan Folder.")
-    st.dataframe(df_baru) # Menampilkan apa yang barusan diinput
+    st.success(f"Berhasil! Data {nama} tersimpan.")
+    st.dataframe(df_baru)
+
+# --- TOMBOL DOWNLOAD (Di Luar IF agar selalu muncul) ---
+st.markdown("---")
+st.subheader("Admin Area")
+if os.path.exists(excel_file):
+    with open(excel_file, "rb") as f:
+        st.download_button(
+            label="📊 Download Laporan Excel",
+            data=f,
+            file_name=f"Rekap_Absen_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+else:
+    st.info("Belum ada data absen masuk untuk diunduh.")
