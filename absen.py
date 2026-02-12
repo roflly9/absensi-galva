@@ -3,16 +3,22 @@ from datetime import datetime
 import os
 import pandas as pd
 import pytz 
+import zipfile # Library tambahan untuk membuat rekap ZIP
+import shutil  # Library tambahan untuk menghapus folder
 
 # Tentukan zona waktu Manado (WITA)
 timezone = pytz.timezone('Asia/Makassar')
 
 st.title("Sistem Absensi Galva Manado")
 
-# File Excel untuk menyimpan semua data
+# Konfigurasi Folder & File
 excel_file = "report_absensi.xlsx"
+folder_foto = "hasil_absen"
 
-# Inisialisasi DataFrame di awal agar tidak error
+if not os.path.exists(folder_foto):
+    os.makedirs(folder_foto)
+
+# Inisialisasi DataFrame
 if os.path.exists(excel_file):
     df_total = pd.read_excel(excel_file)
 else:
@@ -35,33 +41,33 @@ if menu == "Absensi Karyawan":
     else:
         img_file = st.file_uploader("Upload Bukti", type=['jpg', 'jpeg', 'png', 'pdf'])
 
-    # Logika penentuan tombol submit
     if opsi_absen == "Hadir di Kantor":
         submit = img_file is not None
     else:
         submit = st.button("Simpan Data")
 
-    # PERBAIKAN INDENTASI DI SINI
     if submit and nama != "Pilih Nama":
         waktu_klik = datetime.now(timezone) 
         jam_absen = waktu_klik.strftime("%H:%M:%S")
         tgl_absen = waktu_klik.strftime("%Y-%m-%d")
 
-        # Logika Status
         if opsi_absen == "Hadir di Kantor":
-            if (waktu_klik.hour > 8 or (waktu_klik.hour == 8 and waktu_klik.minute > 5)):
-                status = "TERLAMBAT"
-            else:
-                status = "TEPAT WAKTU"
+            status = "TERLAMBAT" if (waktu_klik.hour > 8 or (waktu_klik.hour == 8 and waktu_klik.minute > 5)) else "TEPAT WAKTU"
         else:
             status = opsi_absen.upper()
 
-        # Update Data ke DataFrame Total
+        # Simpan Data Teks
         data_baru = pd.DataFrame([[tgl_absen, jam_absen, nama, status, alasan]], columns=df_total.columns)
-        
-        # Simpan permanen ke Excel
         df_total = pd.concat([df_total, data_baru], ignore_index=True)
         df_total.to_excel(excel_file, index=False)
+
+        # Simpan File Foto/Bukti dengan nama yang jelas
+        ext = "jpg" if opsi_absen == "Hadir di Kantor" else img_file.name.split('.')[-1]
+        nama_file_foto = f"{tgl_absen}_{nama}_{status}.{ext}".replace(" ", "_")
+        path_foto = os.path.join(folder_foto, nama_file_foto)
+        
+        with open(path_foto, "wb") as f:
+            f.write(img_file.getbuffer())
 
         st.success(f"Berhasil! Absen {nama} telah tercatat.")
         st.table(data_baru)
@@ -74,52 +80,57 @@ elif menu == "Login Admin":
     if password == "galva123":
         st.success("Login Berhasil!")
         
-        # TAB untuk memisahkan Tabel dan Foto
-        tab1, tab2 = st.tabs(["📊 Rekap Absensi", "🖼️ Lihat Lampiran Foto/File"])
+        # --- FITUR RESET (Tombol Berbahaya) ---
+        st.warning("⚠️ Area Berbahaya")
+        if st.button("RESET SEMUA DATA (Hapus Excel & Foto)"):
+            if os.path.exists(excel_file):
+                os.remove(excel_file)
+            if os.path.exists(folder_foto):
+                shutil.rmtree(folder_foto)
+                os.makedirs(folder_foto)
+            st.error("Semua data telah direset! Halaman akan dimuat ulang...")
+            st.rerun()
+        
+        st.markdown("---")
+        tab1, tab2 = st.tabs(["📊 Rekap Absensi", "🖼️ Rekap Foto/File"])
         
         with tab1:
             if os.path.exists(excel_file):
                 df_admin = pd.read_excel(excel_file)
                 st.dataframe(df_admin)
-                
                 with open(excel_file, "rb") as f:
-                    st.download_button(
-                        label="📥 Download Excel Keseluruhan",
-                        data=f,
-                        file_name=f"Rekap_Total_{datetime.now(timezone).strftime('%d%m%Y')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                    st.download_button("📥 Download Excel Keseluruhan", f, f"Rekap_Total_{datetime.now(timezone).strftime('%d%m%Y')}.xlsx")
             else:
                 st.info("Belum ada data tabel.")
 
         with tab2:
-            st.write("Daftar lampiran yang tersimpan di server:")
-            folder_foto = "hasil_absen"
+            files = [f for f in os.listdir(folder_foto) if f.endswith(('.jpg', '.jpeg', '.png', '.pdf'))]
             
-            if os.path.exists(folder_foto):
-                files = os.listdir(folder_foto)
-                # Filter hanya file foto atau pdf (menghindari file excel masuk daftar)
-                lampiran = [f for f in files if f.endswith(('.jpg', '.jpeg', '.png', '.pdf'))]
+            if files:
+                st.write(f"Terdapat {len(files)} file lampiran hari ini.")
                 
-                if lampiran:
-                    selected_file = st.selectbox("Pilih file untuk dilihat:", lampiran)
-                    path_file = os.path.join(folder_foto, selected_file)
-                    
-                    # Tampilkan jika gambar
-                    if selected_file.endswith(('.jpg', '.jpeg', '.png')):
-                        st.image(path_file, caption=selected_file, use_container_width=True)
-                    
-                    # Tombol download untuk file individu
-                    with open(path_file, "rb") as f:
-                        st.download_button(
-                            label=f"💾 Download {selected_file}",
-                            data=f,
-                            file_name=selected_file
-                        )
-                else:
-                    st.info("Belum ada lampiran foto/file.")
+                # MEMBUAT ZIP REKAP FOTO
+                zip_path = "rekap_foto.zip"
+                with zipfile.ZipFile(zip_path, 'w') as zipf:
+                    for file in files:
+                        zipf.write(os.path.join(folder_foto, file), file)
+                
+                with open(zip_path, "rb") as f:
+                    st.download_button(
+                        label="📦 DOWNLOAD SEMUA FOTO (ZIP)",
+                        data=f,
+                        file_name=f"Rekap_Foto_{datetime.now(timezone).strftime('%d%m%Y')}.zip",
+                        mime="application/zip"
+                    )
+                
+                st.markdown("---")
+                st.write("Preview Individu:")
+                selected_file = st.selectbox("Lihat detail file:", files)
+                path_sel = os.path.join(folder_foto, selected_file)
+                if selected_file.endswith(('.jpg', '.jpeg', '.png')):
+                    st.image(path_sel, use_container_width=True)
             else:
-                st.info("Folder lampiran belum terbentuk.")
+                st.info("Belum ada lampiran foto untuk direkap.")
                 
     elif password != "":
         st.error("Password Salah!")
