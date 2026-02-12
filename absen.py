@@ -72,21 +72,54 @@ elif menu == "Login Admin":
     password = st.text_input("Masukkan Password Admin:", type="password")
     
     if password == "galva123":
-        st.success("Login Berhasil! Berikut Rekap Seluruh Karyawan:")
+        st.success("Login Berhasil!")
         
-        # Reload data terbaru dari Excel
-        if os.path.exists(excel_file):
-            df_admin = pd.read_excel(excel_file)
-            st.dataframe(df_admin)
+        # TAB untuk memisahkan Tabel dan Foto
+        tab1, tab2 = st.tabs(["📊 Rekap Absensi", "🖼️ Lihat Lampiran Foto/File"])
+        
+        with tab1:
+            if os.path.exists(excel_file):
+                df_admin = pd.read_excel(excel_file)
+                st.dataframe(df_admin)
+                
+                with open(excel_file, "rb") as f:
+                    st.download_button(
+                        label="📥 Download Excel Keseluruhan",
+                        data=f,
+                        file_name=f"Rekap_Total_{datetime.now(timezone).strftime('%d%m%Y')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+            else:
+                st.info("Belum ada data tabel.")
+
+        with tab2:
+            st.write("Daftar lampiran yang tersimpan di server:")
+            folder_foto = "hasil_absen"
             
-            with open(excel_file, "rb") as f:
-                st.download_button(
-                    label="📊 Download Semua Data (Excel)",
-                    data=f,
-                    file_name=f"Rekap_Total_{datetime.now(timezone).strftime('%d%m%Y')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-        else:
-            st.info("Belum ada data absen.")
+            if os.path.exists(folder_foto):
+                files = os.listdir(folder_foto)
+                # Filter hanya file foto atau pdf (menghindari file excel masuk daftar)
+                lampiran = [f for f in files if f.endswith(('.jpg', '.jpeg', '.png', '.pdf'))]
+                
+                if lampiran:
+                    selected_file = st.selectbox("Pilih file untuk dilihat:", lampiran)
+                    path_file = os.path.join(folder_foto, selected_file)
+                    
+                    # Tampilkan jika gambar
+                    if selected_file.endswith(('.jpg', '.jpeg', '.png')):
+                        st.image(path_file, caption=selected_file, use_container_width=True)
+                    
+                    # Tombol download untuk file individu
+                    with open(path_file, "rb") as f:
+                        st.download_button(
+                            label=f"💾 Download {selected_file}",
+                            data=f,
+                            file_name=selected_file
+                        )
+                else:
+                    st.info("Belum ada lampiran foto/file.")
+            else:
+                st.info("Folder lampiran belum terbentuk.")
+                
     elif password != "":
         st.error("Password Salah!")
