@@ -2,6 +2,10 @@ import streamlit as st
 from datetime import datetime
 import os
 import pandas as pd
+import pytz 
+
+# Tentukan zona waktu Manado (WITA)
+timezone = pytz.timezone('Asia/Makassar')
 
 st.title("Sistem Absensi Galva Manado")
 
@@ -31,21 +35,31 @@ if menu == "Absensi Karyawan":
     else:
         img_file = st.file_uploader("Upload Bukti", type=['jpg', 'jpeg', 'png', 'pdf'])
 
-    submit = st.button("Simpan Data") if opsi_absen != "Hadir di Kantor" else (img_file is not None)
+    # Logika penentuan tombol submit
+    if opsi_absen == "Hadir di Kantor":
+        submit = img_file is not None
+    else:
+        submit = st.button("Simpan Data")
 
+    # PERBAIKAN INDENTASI DI SINI
     if submit and nama != "Pilih Nama":
-        waktu_klik = datetime.now()
+        waktu_klik = datetime.now(timezone) 
         jam_absen = waktu_klik.strftime("%H:%M:%S")
         tgl_absen = waktu_klik.strftime("%Y-%m-%d")
 
         # Logika Status
         if opsi_absen == "Hadir di Kantor":
-            status = "TERLAMBAT" if (waktu_klik.hour > 8 or (waktu_klik.hour == 8 and waktu_klik.minute > 5)) else "TEPAT WAKTU"
+            if (waktu_klik.hour > 8 or (waktu_klik.hour == 8 and waktu_klik.minute > 5)):
+                status = "TERLAMBAT"
+            else:
+                status = "TEPAT WAKTU"
         else:
             status = opsi_absen.upper()
 
         # Update Data ke DataFrame Total
         data_baru = pd.DataFrame([[tgl_absen, jam_absen, nama, status, alasan]], columns=df_total.columns)
+        
+        # Simpan permanen ke Excel
         df_total = pd.concat([df_total, data_baru], ignore_index=True)
         df_total.to_excel(excel_file, index=False)
 
@@ -57,20 +71,19 @@ elif menu == "Login Admin":
     st.subheader("Halaman Khusus Admin")
     password = st.text_input("Masukkan Password Admin:", type="password")
     
-    # Ganti 'galva123' dengan password yang kamu mau
     if password == "galva123":
         st.success("Login Berhasil! Berikut Rekap Seluruh Karyawan:")
         
-        if not df_total.empty:
-            # Tampilkan Tabel Keseluruhan
-            st.dataframe(df_total)
+        # Reload data terbaru dari Excel
+        if os.path.exists(excel_file):
+            df_admin = pd.read_excel(excel_file)
+            st.dataframe(df_admin)
             
-            # Tombol Download Excel Keseluruhan
             with open(excel_file, "rb") as f:
                 st.download_button(
                     label="📊 Download Semua Data (Excel)",
                     data=f,
-                    file_name=f"Rekap_Total_{datetime.now().strftime('%d%m%Y')}.xlsx",
+                    file_name=f"Rekap_Total_{datetime.now(timezone).strftime('%d%m%Y')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
         else:
