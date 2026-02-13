@@ -111,7 +111,6 @@ columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda", "Status Denda"
 if os.path.exists(excel_file):
     try:
         df_total = pd.read_excel(excel_file)
-        # Pastikan kolom Tanggal bertipe datetime untuk grafik
         df_total['Tanggal'] = pd.to_datetime(df_total['Tanggal']).dt.date
     except:
         df_total = pd.DataFrame(columns=columns)
@@ -126,11 +125,11 @@ def navigasi(page_name):
 
 # --- 3. LOGIKA HALAMAN ---
 
+# --- DASHBOARD ---
 if st.session_state.page == 'Dashboard':
     st.markdown('<div class="app-header">🏢 GALVA MANADO</div>', unsafe_allow_html=True)
     st.markdown('<div class="welcome-box">PRESENSI & DENDA</div>', unsafe_allow_html=True)
 
-    # SEKSI 1: MENU
     st.markdown('<p class="section-title">Aktivitas Karyawan</p>', unsafe_allow_html=True)
     if st.button("📝 &nbsp; MULAI ABSENSI"): navigasi('Absensi')
     if st.button("💰 &nbsp; TEBUS DENDA"): navigasi('Tebus')
@@ -138,117 +137,100 @@ if st.session_state.page == 'Dashboard':
     st.markdown('<p class="section-title">Menu Pengelola</p>', unsafe_allow_html=True)
     if st.button("🔐 &nbsp; ADMIN PANEL"): navigasi('Admin')
 
-    # SEKSI 2: STATUS & STATISTIK
     st.markdown('<p class="section-title">Status & Ringkasan</p>', unsafe_allow_html=True)
-    
     if not df_total.empty:
         tgl_skrg = datetime.now(timezone).date()
         df_hari_ini = df_total[df_total['Tanggal'] == tgl_skrg]
-        
-        # Hitung Metrics
         total_telat_hari_ini = len(df_hari_ini[df_hari_ini['Status'] == 'TERLAMBAT'])
         tunggakan_total = df_total[df_total['Status Denda'] == 'Belum Lunas']['Denda'].sum()
         setoran_lunas = df_total[df_total['Status Denda'] == 'Lunas']['Denda'].sum()
         
-        # Baris 1: Metrics
         m1, m2 = st.columns(2)
         m1.metric("Telat Hari Ini", f"{total_telat_hari_ini}x")
         m2.metric("Total Setoran", f"Rp {setoran_lunas:,}")
-        
-        st.write("") # Spacer
         st.metric("Tunggakan Belum Bayar", f"Rp {tunggakan_total:,}", delta_color="inverse")
-
-        # Grafik Terlambat 1 Minggu Terakhir
-        st.write("")
-        st.markdown("**Grafik Terlambat (7 Hari Terakhir)**")
-        
-        # Filter data 7 hari terakhir
-        tgl_mulai = tgl_skrg - timedelta(days=6)
-        df_7_hari = df_total[(df_total['Tanggal'] >= tgl_mulai) & (df_total['Status'] == 'TERLAMBAT')]
-        
-        if not df_7_hari.empty:
-            # Grouping per tanggal
-            grafik_data = df_7_hari.groupby('Tanggal').size().reset_index(name='Jumlah Karyawan')
-            # Set index agar grafik terbaca dengan benar
-            grafik_data = grafik_data.set_index('Tanggal')
-            st.bar_chart(grafik_data, color="#d32f2f")
-        else:
-            st.caption("Belum ada data keterlambatan dalam 7 hari terakhir.")
-            
     else:
         st.info("Belum ada data untuk ditampilkan.")
 
-# --- HALAMAN FORM ABSENSI ---
+# --- HALAMAN FORM ABSENSI (UPDATE) ---
 elif st.session_state.page == 'Absensi':
     st.markdown('<div class="app-header">📝 FORM ABSENSI</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Menu"): navigasi('Dashboard')
     
-    karyawan = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"]
-    nama = st.selectbox("Pilih Nama Anda:", karyawan)
-    opsi = st.radio("Keterangan:", ["Hadir di Kantor", "Izin Terlambat", "Tugas Luar", "Sakit/Cuti"])
+    st.markdown("### Isi Data Kehadiran")
     
+    karyawan = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"]
+    nama = st.selectbox("Nama Karyawan:", karyawan)
+    
+    opsi = st.radio("Opsi Kehadiran:", [
+        "Hadir di kantor",
+        "Izin terlambat",
+        "Tidak masuk kantor Cuti/Sakit",
+        "Tugas Luar kota",
+        "Langsung ke customer"
+    ])
+    
+    # --- LOGIKA WAKTU & DENDA ---
     waktu_skrg = datetime.now(timezone)
-    st.info(f"🕒 Waktu Server: {waktu_skrg.strftime('%H:%M:%S')} WITA")
+    jam_skrg = waktu_skrg.time()
+    batas_absen = datetime.strptime("08:05:00", "%H:%M:%S").time()
+    
+    # Cek apakah terlambat (hanya berlaku untuk 'Hadir di kantor')
+    is_telat = False
+    if opsi == "Hadir di kantor" and jam_skrg > batas_absen:
+        is_telat = True
+    
+    # Tampilkan Status Real-time
+    st.divider()
+    c1, c2 = st.columns(2)
+    c1.info(f"🕒 **Waktu:** {waktu_skrg.strftime('%H:%M:%S')} WITA")
+    
+    if is_telat:
+        c2.error("⚠️ **Status:** TERLAMBAT")
+        st.warning("Anda terlambat (lewat jam 08:05). Denda **Rp 10.000** akan dicatat.")
+    else:
+        c2.success("✅ **Status:** TEPAT WAKTU")
+
+    # Input Foto
     img = st.camera_input("Ambil Foto Selfie")
     
     if st.button("🚀 KIRIM ABSENSI"):
         if nama != "Pilih Nama" and img:
-            is_telat = waktu_skrg.hour > 8 or (waktu_skrg.hour == 8 and waktu_skrg.minute > 5)
-            denda = 10000 if (opsi == "Hadir di Kantor" and is_telat) else 0
-            status = "TERLAMBAT" if denda > 0 else opsi.upper()
+            # Hitung denda
+            denda = 10000 if is_telat else 0
+            status_final = "TERLAMBAT" if is_telat else opsi.upper()
             
+            # Simpan Data
             data_baru = pd.DataFrame([[
-                waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"),
-                nama, status, "", denda, "Belum Lunas" if denda > 0 else "Lunas"
+                waktu_skrg.date(), 
+                waktu_skrg.strftime("%H:%M:%S"),
+                nama, 
+                status_final, 
+                opsi, 
+                denda, 
+                "Belum Lunas" if denda > 0 else "Lunas"
             ]], columns=columns)
             
             df_total = pd.concat([df_total, data_baru], ignore_index=True)
             df_total.to_excel(excel_file, index=False)
-            st.success("✅ Absensi Berhasil!")
-            time.sleep(1.5)
+            
+            # Notifikasi Berhasil
+            st.balloons()
+            st.success(f"✅ Berhasil! Absensi {nama} telah tercatat.")
+            time.sleep(2)
             navigasi('Dashboard')
         else:
-            st.error("Nama dan Foto wajib diisi!")
+            st.error("Gagal! Pastikan Nama sudah dipilih dan Foto sudah diambil.")
 
-# --- HALAMAN TEBUS DENDA ---
+# --- HALAMAN LAINNYA (Tebus & Admin) ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
-    
-    st.markdown("### Daftar Tunggakan Anda")
-    if not df_total.empty:
-        df_tunggakan = df_total[df_total['Status Denda'] == 'Belum Lunas']
-        if not df_tunggakan.empty:
-            st.dataframe(df_tunggakan[['Tanggal', 'Nama', 'Denda']], use_container_width=True)
-            st.warning("Silakan hubungi Admin untuk melakukan pembayaran.")
-        else:
-            st.success("Selamat! Tidak ada tunggakan denda.")
-    else:
-        st.info("Belum ada data.")
+    st.dataframe(df_total[df_total['Status Denda'] == 'Belum Lunas'][['Tanggal', 'Nama', 'Denda']], use_container_width=True)
 
-# --- HALAMAN ADMIN PANEL ---
 elif st.session_state.page == 'Admin':
     st.markdown('<div class="app-header">🔐 ADMIN PANEL</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
-    
     pw = st.text_input("Password Admin:", type="password")
     if pw == "galva123":
-        st.write("### Rekap Seluruh Data")
-        # Fitur Update Status Denda
-        if not df_total.empty:
-            st.dataframe(df_total, use_container_width=True)
-            
-            st.divider()
-            st.write("### Tandai Denda Lunas")
-            idx_bayar = st.number_input("Masukkan No. Index dari tabel untuk konfirmasi bayar:", min_value=0, step=1)
-            if st.button("Konfirmasi Pembayaran"):
-                if idx_bayar in df_total.index:
-                    df_total.at[idx_bayar, 'Status Denda'] = 'Lunas'
-                    df_total.to_excel(excel_file, index=False)
-                    st.success(f"Denda index {idx_bayar} berhasil dilunaskan!")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error("Index tidak ditemukan.")
-            
-            st.download_button("📊 Download Excel", data=open(excel_file, "rb"), file_name="rekap_absensi.xlsx")
+        st.dataframe(df_total, use_container_width=True)
