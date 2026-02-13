@@ -70,9 +70,9 @@ st.markdown("""
         background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%) !important;
     }
 
-    /* Input Password Admin Styling */
+    /* Input Password Admin Styling - Bis Hitam Tebal */
     .stTextInput > div > div > input {
-        border: 2px solid black !important;
+        border: 2px solid #000000 !important;
         border-radius: 10px !important;
     }
 
@@ -151,7 +151,7 @@ if st.session_state.page == 'Dashboard':
 
     st.markdown('<p class="section-title">Menu Pengelola</p>', unsafe_allow_html=True)
     if st.button("🔐 &nbsp; ADMIN PANEL"): 
-        st.session_state.admin_authenticated = False # Reset login setiap masuk
+        st.session_state.admin_authenticated = False 
         navigasi('Admin')
 
     st.markdown('<p class="section-title">Status & Ringkasan Hari Ini</p>', unsafe_allow_html=True)
@@ -275,17 +275,19 @@ elif st.session_state.page == 'Tebus':
         else:
             st.success(f"Bebas Denda! {user_pilih} tidak memiliki tunggakan.")
 
-# --- D. ADMIN PANEL (NEW: PASSWORD BORDER & LOGIN BUTTON) ---
+# --- D. ADMIN PANEL ---
 elif st.session_state.page == 'Admin':
     st.markdown('<div class="app-header">🔐 ADMIN PANEL</div>', unsafe_allow_html=True)
     if st.button("⬅️ Dashboard"): navigasi('Dashboard')
     
     if not st.session_state.admin_authenticated:
         st.markdown('<p class="section-title">Verifikasi Admin</p>', unsafe_allow_html=True)
-        pswd = st.text_input("Masukkan Password Admin:", type="password", help="Kotak bergaris hitam wajib diisi")
         
-        # Tombol login hanya muncul jika input password tidak kosong
-        if pswd:
+        # Perubahan: Menggunakan label kosong dan penanganan input yang lebih responsif
+        pswd = st.text_input("Masukkan Password Admin:", type="password")
+        
+        # Logika: Jika ada karakter di variabel pswd, tombol langsung muncul
+        if pswd != "":
             if st.button("🔓 MASUK ADMIN"):
                 if pswd == "galva123":
                     st.session_state.admin_authenticated = True
@@ -293,7 +295,6 @@ elif st.session_state.page == 'Admin':
                 else:
                     st.error("Password Salah! Akses Ditolak.")
     else:
-        # Jika sudah login, tampilkan konten Admin
         tab_rekap, tab_acc = st.tabs(["📊 SEMUA DATA", "✅ ACC PEMBAYARAN"])
         
         with tab_rekap:
