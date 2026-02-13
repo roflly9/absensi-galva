@@ -26,6 +26,15 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+    
+    /* MENYEMBUNYIKAN TOMBOL MANAGE APP / TOOLBAR STREAMLIT */
+    div[data-testid="stStatusWidget"] {
+        display: none !important;
+    }
+    .stActionButton {
+        display: none !important;
+    }
+
     .block-container { max-width: 100% !important; padding: 0.5rem !important; margin: auto; overflow-x: hidden; }
     .stApp { background-color: #f8f9fa; }
     .app-header {
@@ -62,6 +71,10 @@ st.markdown("""
     div[data-testid="stMetric"] { 
         background: white !important; padding: 15px !important; border-radius: 18px !important; 
         border: 1px solid #e3f2fd !important; 
+    }
+    /* Memberi ruang di bawah tabel agar tidak tertutup elemen sistem */
+    div[data-testid="stTable"] {
+        margin-bottom: 60px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -155,12 +168,12 @@ elif st.session_state.page == 'Absensi':
     opsi = st.radio("Opsi Kehadiran:", ["Hadir di kantor", "Izin Terlambat", "Tidak masuk kantor Cuti/Sakit", "Tugas luar kota", "Langsung ke Customer"], index=0)
     
     waktu_skrg = datetime.now(timezone)
-    batas_absen = datetime.strptime("00:05:00", "%H:%M:%S").time() 
+    batas_absen = datetime.strptime("08:05:00", "%H:%M:%S").time() 
     
     alasan, img_data, denda_final, st_text = "", None, 0, ""
     
     if opsi == "Hadir di kantor":
-        is_telat = waktu_skrg.time() > batas_absen
+        is_telat = waktu_skrg.time() > bats_absen if 'bats_absen' in locals() else waktu_skrg.time() > datetime.strptime("08:05:00", "%H:%M:%S").time()
         st_text = "TERLAMBAT" if is_telat else "HADIR"
         denda_final = 10000 if is_telat else 0
         card_class = "status-card terlambat" if is_telat else "status-card"
@@ -250,7 +263,6 @@ elif st.session_state.page == 'Admin':
         
         with t1:
             if not df_total.empty:
-                # Filter Data Bulan Berjalan
                 waktu_skrg = datetime.now(timezone)
                 df_tren = df_total.copy()
                 df_tren['Tanggal_DT'] = pd.to_datetime(df_tren['Tanggal'])
@@ -281,19 +293,16 @@ elif st.session_state.page == 'Admin':
                 st.metric("Total Denda Belum Tertagih", f"Rp {int(total_piutang):,}")
 
                 if not df_unpaid.empty:
-                    # Kelompokkan per Nama
                     list_hutang = df_unpaid.groupby('Nama')['Denda'].sum().reset_index()
                     list_hutang = list_hutang.sort_values(by='Denda', ascending=False)
                     list_hutang.columns = ['Nama Karyawan', 'Total Hutang (Rp)']
-                    
-                    # Tampilkan Tabel Sederhana
                     st.table(list_hutang.style.format({"Total Hutang (Rp)": "{:,.0f}"}))
                 else:
                     st.success("Luar biasa! Tidak ada tunggakan denda.")
             else:
                 st.info("Belum ada data untuk dianalisis.")
 
-        with t2: # --- TAB DATA (FILTER BULAN) ---
+        with t2: 
             if not df_total.empty:
                 df_temp = df_total.copy()
                 df_temp['Tanggal'] = pd.to_datetime(df_temp['Tanggal'])
@@ -322,7 +331,7 @@ elif st.session_state.page == 'Admin':
             else:
                 st.info("Belum ada data untuk ditampilkan.")
 
-        with t3: # VERIFIKASI
+        with t3: 
             pending = df_total[df_total['Status Denda'] == 'Menunggu Persetujuan']
             if not pending.empty:
                 for idx, row in pending.iterrows():
@@ -346,7 +355,7 @@ elif st.session_state.page == 'Admin':
                             df_total.at[idx, 'Status Denda'] = 'Belum Lunas'; df_total.to_excel(excel_file, index=False); st.rerun()
             else: st.info("Tidak ada verifikasi.")
         
-        with t4: # TAB FOTO
+        with t4: 
             if os.path.exists("img_data"):
                 files = sorted([os.path.join("img_data", f) for f in os.listdir("img_data") if f.startswith("ABS_")], reverse=True)
                 if files:
