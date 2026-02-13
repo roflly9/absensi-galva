@@ -15,6 +15,10 @@ except ImportError:
 # --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Absensi Galva Manado", page_icon="🏢", layout="wide")
 
+# BUAT FOLDER FOTO JIKA BELUM ADA
+if not os.path.exists("img_data"):
+    os.makedirs("img_data")
+
 # Styling CSS
 st.markdown("""
     <style>
@@ -64,18 +68,16 @@ st.markdown("""
 # --- 2. ENGINE DATA ---
 timezone = pytz.timezone('Asia/Makassar')
 excel_file = "report_absensi.xlsx"
-columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda", "Status Denda", "Foto_Absen", "Bukti_Bayar"]
+# Kolom di Excel sekarang hanya menyimpan PATH/NAMA FILE foto, bukan binernya
+columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda", "Status Denda", "Foto_Path", "Bukti_Path"]
 karyawan_list = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"]
 
 def muat_data():
     if os.path.exists(excel_file):
         try:
-            # Menggunakan engine openpyxl secara eksplisit
             df = pd.read_excel(excel_file, engine='openpyxl')
             for col in columns:
-                if col not in df.columns:
-                    df[col] = None
-            # Memastikan Tanggal terformat dengan benar
+                if col not in df.columns: df[col] = None
             df['Tanggal'] = pd.to_datetime(df['Tanggal']).dt.date
             return df
         except:
@@ -152,7 +154,13 @@ elif st.session_state.page == 'Absensi':
         if nama == "Pilih Nama": st.error("Silahkan pilih Nama!")
         elif img_data is None: st.error("Wajib lampirkan foto!")
         else:
-            baru = pd.DataFrame([[waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"), nama, st_text, alasan, denda_final, "Belum Lunas" if denda_final > 0 else "Lunas", img_data, None]], columns=columns)
+            # SIMPAN FILE KE FOLDER img_data
+            file_name = f"img_data/ABS_{nama}_{waktu_skrg.strftime('%Y%m%d_%H%M%S')}.jpg"
+            with open(file_name, "wb") as f:
+                f.write(img_data)
+            
+            # SIMPAN PATH KE EXCEL
+            baru = pd.DataFrame([[waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"), nama, st_text, alasan, denda_final, "Belum Lunas" if denda_final > 0 else "Lunas", file_name, None]], columns=columns)
             df_total = pd.concat([df_total, baru], ignore_index=True)
             df_total.to_excel(excel_file, index=False, engine='openpyxl')
             st.balloons(); st.success("✅ Terkirim!"); time.sleep(1); navigasi('Dashboard')
@@ -172,24 +180,31 @@ elif st.session_state.page == 'Tebus':
             nominal_tebus = st.number_input("Nominal tebus:", min_value=10000, max_value=int(total_hutang), step=10000)
             metode = st.radio("Metode:", ["Cash/Transfer", "Membersihkan Kantor"])
             
-            bukti_list = []
+            bukti_files = []
             if metode == "Cash/Transfer":
                 f_bayar = st.file_uploader("Upload Bukti Pembayaran:", type=['jpg','png','jpeg'])
-                if f_bayar: bukti_list = [f_bayar.getvalue()]
+                if f_bayar: bukti_files = [f_bayar]
             else:
                 f_before = st.file_uploader("Foto Sebelum:", type=['jpg','png','jpeg'], key="up_bfr")
                 f_after = st.file_uploader("Foto Sesudah:", type=['jpg','png','jpeg'], key="up_aft")
-                if f_before and f_after: bukti_list = [f_before.getvalue(), f_after.getvalue()]
+                if f_before and f_after: bukti_files = [f_before, f_after]
 
             if st.button("✅ KONFIRMASI"):
-                if not bukti_list: st.error("Upload bukti foto!")
+                if not bukti_files: st.error("Upload bukti foto!")
                 else:
+                    # Simpan File Bukti
+                    paths = []
+                    for bf in bukti_files:
+                        path_bukti = f"img_data/TBS_{user_pilih}_{int(time.time())}.jpg"
+                        with open(path_bukti, "wb") as f: f.write(bf.getvalue())
+                        paths.append(path_bukti)
+                    
                     idx_unpaid = unpaid.index.tolist()
                     terbayar = 0
                     for idx in idx_unpaid:
                         if terbayar < nominal_tebus:
                             df_total.at[idx, 'Status Denda'] = 'Menunggu Persetujuan'
-                            df_total.at[idx, 'Bukti_Bayar'] = bukti_list[0] if len(bukti_list) == 1 else bukti_list
+                            df_total.at[idx, 'Bukti_Path'] = str(paths)
                             df_total.at[idx, 'Alasan'] = f"Metode: {metode} (Penebusan Rp {nominal_tebus:,})"
                             terbayar += df_total.at[idx, 'Denda']
                     df_total.to_excel(excel_file, index=False, engine='openpyxl')
@@ -218,56 +233,56 @@ elif st.session_state.page == 'Admin':
             if not pending.empty:
                 for idx, row in pending.iterrows():
                     with st.expander(f"Verifikasi: {row['Nama']} | {row['Alasan']}"):
-                        bukti = row.get('Bukti_Bayar')
-                        if bukti is not None and str(bukti) != 'nan':
+                        bpath = row.get('Bukti_Path')
+                        if bpath and str(bpath) != 'nan':
                             try:
-                                if isinstance(bukti, list):
+                                paths = eval(bpath) if bpath.startswith('[') else [bpath]
+                                if len(paths) > 1:
                                     c1, c2 = st.columns(2)
-                                    c1.image(bukti[0], caption="Before", use_container_width=True)
-                                    c2.image(bukti[1], caption="After", use_container_width=True)
+                                    c1.image(paths[0], caption="Before")
+                                    c2.image(paths[1], caption="After")
                                 else:
-                                    st.image(bukti, caption="Bukti", width=400)
-                            except: st.warning("Media rusak.")
+                                    st.image(paths[0], width=300)
+                            except: st.warning("File foto tidak ditemukan.")
                         
                         col_a, col_b = st.columns(2)
                         if col_a.button(f"Sahkan (ID:{idx})", key=f"y_{idx}"):
-                            df_total.at[idx, 'Status Denda'] = 'Lunas'; df_total.to_excel(excel_file, index=False, engine='openpyxl'); st.rerun()
+                            df_total.at[idx, 'Status Denda'] = 'Lunas'; df_total.to_excel(excel_file, index=False); st.rerun()
                         if col_b.button(f"Tolak (ID:{idx})", key=f"n_{idx}"):
-                            df_total.at[idx, 'Status Denda'] = 'Belum Lunas'; df_total.to_excel(excel_file, index=False, engine='openpyxl'); st.rerun()
-            else: st.info("Tidak ada permintaan verifikasi.")
+                            df_total.at[idx, 'Status Denda'] = 'Belum Lunas'; df_total.to_excel(excel_file, index=False); st.rerun()
+            else: st.info("Tidak ada verifikasi.")
 
         with t1:
             if HAS_PLOTLY and not df_total.empty:
                 telat_df = df_total[df_total['Status'] == 'TERLAMBAT']
                 if not telat_df.empty:
-                    grafik = px.bar(telat_df.groupby('Tanggal').size().reset_index(name='Jumlah'), x='Tanggal', y='Jumlah', title="Trend Keterlambatan")
+                    grafik = px.bar(telat_df.groupby('Tanggal').size().reset_index(name='Jumlah'), x='Tanggal', y='Jumlah')
                     st.plotly_chart(grafik, use_container_width=True)
         
         with t2:
-            df_view = df_total.drop(columns=['Foto_Absen', 'Bukti_Bayar'], errors='ignore')
-            st.dataframe(df_view)
-            st.download_button("📥 Download Excel", data=open(excel_file, "rb") if os.path.exists(excel_file) else b"", file_name="rekap_galva.xlsx")
+            # REKAPAN EXCEL BERSIH (TANPA PATH FOTO)
+            df_view = df_total.drop(columns=['Foto_Path', 'Bukti_Path'], errors='ignore')
+            st.dataframe(df_view, use_container_width=True)
+            st.download_button("📥 Download Excel", data=open(excel_file, "rb").read(), file_name="rekap_galva.xlsx")
         
-        with t4: # FOTO ABSENSI (BAGIAN YANG DIPERBAIKI)
-            if not df_total.empty:
-                # Memfilter hanya data yang memiliki foto
-                df_foto = df_total[df_total['Foto_Absen'].notna()]
-                if not df_foto.empty:
-                    # Tampilkan foto terbaru di atas
-                    df_foto = df_foto.iloc[::-1] 
-                    for i in range(0, len(df_foto), 4):
+        with t4: # TAB FOTO - MEMANGGIL FILE DARI FOLDER img_data
+            if os.path.exists("img_data"):
+                files = sorted([os.path.join("img_data", f) for f in os.listdir("img_data") if f.startswith("ABS_")], reverse=True)
+                if files:
+                    for i in range(0, len(files), 4):
                         cols = st.columns(4)
-                        for j, (idx, item) in enumerate(df_foto.iloc[i:i+4].iterrows()):
-                            foto = item['Foto_Absen']
+                        for j, fpath in enumerate(files[i:i+4]):
                             try:
-                                with cols[j]:
-                                    st.image(foto, caption=f"{item['Nama']}\n{item['Tanggal']}", use_container_width=True)
-                            except:
-                                continue
-                else:
-                    st.warning("Belum ada foto absensi yang tersimpan.")
-        
+                                # Ambil info dari nama file: ABS_Nama_Tanggal_Jam.jpg
+                                fname = os.path.basename(fpath).replace(".jpg","").split("_")
+                                caption = f"{fname[1]} | {fname[2]}"
+                                with cols[j]: st.image(fpath, caption=caption, use_container_width=True)
+                            except: continue
+                else: st.info("Belum ada foto di folder.")
+
         with t5:
             if st.button("🔥 RESET SEMUA DATA"):
                 if os.path.exists(excel_file): os.remove(excel_file)
+                import shutil
+                if os.path.exists("img_data"): shutil.rmtree("img_data")
                 st.rerun()
