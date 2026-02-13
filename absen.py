@@ -15,7 +15,7 @@ except ImportError:
 # --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Absensi Galva Manado", page_icon="🏢", layout="wide")
 
-# Styling CSS - Kembali ke Desain Dashboard Sebelumnya
+# Styling CSS
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -85,7 +85,7 @@ def navigasi(nama_hal):
 
 # --- 3. LOGIKA HALAMAN ---
 
-# --- DASHBOARD (DESAIN LAMA) ---
+# --- DASHBOARD ---
 if st.session_state.page == 'Dashboard':
     st.markdown('<div class="app-header">🏢 GALVA MANADO</div>', unsafe_allow_html=True)
     st.markdown('<div class="welcome-box">PRESENSI & DENDA</div>', unsafe_allow_html=True)
@@ -97,18 +97,27 @@ if st.session_state.page == 'Dashboard':
     st.markdown('<p class="section-title">Menu Pengelola</p>', unsafe_allow_html=True)
     if st.button("🔐 &nbsp; ADMIN PANEL"): navigasi('Admin')
 
-    st.markdown('<p class="section-title">Status & Ringkasan Hari Ini</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">Status & Ringkasan</p>', unsafe_allow_html=True)
     if not df_total.empty:
-        tgl_skrg = datetime.now(timezone).date()
-        df_hari_ini = df_total[df_total['Tanggal'] == tgl_skrg]
-        total_telat = len(df_hari_ini[df_hari_ini['Status'] == 'TERLAMBAT'])
-        tunggakan = df_total[df_total['Status Denda'] == 'Belum Lunas']['Denda'].sum()
+        # Menghitung Total Dana Lunas
         total_setoran = df_total[df_total['Status Denda'] == 'Lunas']['Denda'].sum()
-        
-        c1, c2 = st.columns(2)
-        c1.metric("Telat Hari Ini", f"{total_telat}x")
-        c2.metric("Total Setoran", f"Rp {total_setoran:,}")
-        st.metric("Tunggakan Belum Bayar", f"Rp {tunggakan:,}", delta_color="inverse")
+        st.metric("Total Dana Pembayaran Denda", f"Rp {total_setoran:,}")
+
+        # Menampilkan Grafik Terlambat per User (Sama seperti di Admin)
+        if HAS_PLOTLY:
+            telat_df = df_total[df_total['Status'] == 'TERLAMBAT']
+            if not telat_df.empty:
+                st.markdown('<p style="font-size:13px; font-weight:bold; color:#0d47a1; margin-left:10px;">GRAFIK KETERLAMBATAN PER USER</p>', unsafe_allow_html=True)
+                # Group by Nama untuk melihat siapa yang paling sering telat
+                grafik_user = telat_df.groupby('Nama').size().reset_index(name='Total Telat')
+                fig = px.bar(grafik_user, x='Nama', y='Total Telat', 
+                             color='Total Telat', 
+                             color_continuous_scale='Reds',
+                             text_auto=True)
+                fig.update_layout(margin=dict(l=20, r=20, t=10, b=20))
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Belum ada data keterlambatan untuk ditampilkan di grafik.")
     else:
         st.info("Belum ada data aktivitas.")
 
@@ -197,7 +206,6 @@ elif st.session_state.page == 'Admin':
             else: st.info("Tidak ada permintaan verifikasi.")
 
         with t4:
-            # Tampilan Galeri Foto
             for i in range(0, len(df_total), 4):
                 cols = st.columns(4)
                 for j, (idx, item) in enumerate(df_total.iloc[i:i+4].iterrows()):
