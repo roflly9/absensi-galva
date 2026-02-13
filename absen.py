@@ -60,7 +60,6 @@ st.markdown("""
 # --- 2. ENGINE DATA ---
 timezone = pytz.timezone('Asia/Makassar')
 excel_file = "report_absensi.xlsx"
-# Kolom Bukti_Bayar akan menyimpan bytes foto (atau list bytes jika multiple)
 columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda", "Status Denda", "Foto_Absen", "Bukti_Bayar"]
 karyawan_list = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"]
 
@@ -111,12 +110,10 @@ if st.session_state.page == 'Dashboard':
                 fig = px.bar(grafik_user, x='Nama', y='Total Telat', color='Total Telat', color_continuous_scale='Reds', text_auto=True)
                 fig.update_layout(margin=dict(l=20, r=20, t=10, b=20))
                 st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Belum ada data keterlambatan untuk ditampilkan di grafik.")
     else:
         st.info("Belum ada data aktivitas.")
 
-# --- FORM ABSENSI (FIXED) ---
+# --- FORM ABSENSI ---
 elif st.session_state.page == 'Absensi':
     st.markdown('<div class="app-header">📝 FORM ABSENSI</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Menu"): navigasi('Dashboard')
@@ -164,7 +161,7 @@ elif st.session_state.page == 'Absensi':
             df_total.to_excel(excel_file, index=False)
             st.balloons(); st.success("✅ Terkirim!"); time.sleep(2); navigasi('Dashboard')
 
-# --- MENU TEBUS (PEMBARUAN SESUAI PERINTAH) ---
+# --- MENU TEBUS (PILIHAN UPLOAD UNTUK BERSIH-BERSIH) ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 MENU TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Dashboard"): navigasi('Dashboard')
@@ -178,39 +175,34 @@ elif st.session_state.page == 'Tebus':
             st.markdown(f'<div class="status-card terlambat">TOTAL TUNGGAKAN ANDA: <b>Rp {total_hutang:,}</b></div>', unsafe_allow_html=True)
             
             nominal_tebus = st.number_input("Pilih Nominal yang ingin ditebus (Min. 10.000):", min_value=10000, max_value=int(total_hutang), step=10000)
-            
             metode = st.radio("Metode Penebusan:", ["Cash/Transfer", "Membersihkan Kantor"])
             
             bukti_list = []
             if metode == "Cash/Transfer":
-                st.info("Silahkan upload bukti Transfer atau foto bukti bayar Cash.")
-                f_bayar = st.file_uploader("Upload Bukti Pembayaran:", type=['jpg','png','jpeg'], key="cash")
+                f_bayar = st.file_uploader("Upload Bukti Pembayaran (Cash/Transfer):", type=['jpg','png','jpeg'])
                 if f_bayar: bukti_list = [f_bayar.getvalue()]
             else:
-                st.info("Wajib upload foto Sebelum (Before) dan Sesudah (After) membersihkan kantor.")
-                col1, col2 = st.columns(2)
-                with col1: f_before = st.camera_input("Foto Before", key="bfr")
-                with col2: f_after = st.camera_input("Foto After", key="aft")
+                st.info("Upload Foto Sebelum & Sesudah Membersihkan Kantor")
+                f_before = st.file_uploader("Upload Foto Sebelum (Before):", type=['jpg','png','jpeg'], key="up_bfr")
+                f_after = st.file_uploader("Upload Foto Sesudah (After):", type=['jpg','png','jpeg'], key="up_aft")
                 if f_before and f_after: bukti_list = [f_before.getvalue(), f_after.getvalue()]
 
             if st.button("✅ KONFIRMASI PENEBUSAN"):
                 if not bukti_list:
-                    st.error("Gagal! Dokumen bukti tidak lengkap.")
+                    st.error("Gagal! Mohon upload foto bukti sesuai metode yang dipilih.")
                 else:
-                    # Ambil baris-baris hutang user
                     idx_unpaid = unpaid.index.tolist()
                     terbayar = 0
                     for idx in idx_unpaid:
                         if terbayar < nominal_tebus:
                             denda_item = df_total.at[idx, 'Denda']
                             df_total.at[idx, 'Status Denda'] = 'Menunggu Persetujuan'
-                            # Simpan bukti (jika multiple, simpan sebagai list di dalam cell - dihandle saat render Admin)
                             df_total.at[idx, 'Bukti_Bayar'] = bukti_list[0] if len(bukti_list) == 1 else bukti_list
                             df_total.at[idx, 'Alasan'] = f"Metode: {metode} (Penebusan Rp {nominal_tebus:,})"
                             terbayar += denda_item
                     
                     df_total.to_excel(excel_file, index=False)
-                    st.success(f"Permintaan penebusan Rp {nominal_tebus:,} telah dikirim ke Admin."); time.sleep(2); navigasi('Dashboard')
+                    st.success(f"Permintaan penebusan Rp {nominal_tebus:,} via {metode} terkirim!"); time.sleep(2); navigasi('Dashboard')
         else:
             st.success(f"{user_pilih} tidak memiliki tunggakan.")
 
@@ -229,20 +221,18 @@ elif st.session_state.page == 'Admin':
                 for idx, row in pending.iterrows():
                     with st.expander(f"Verifikasi: {row['Nama']} | {row['Alasan']}"):
                         bukti = row['Bukti_Bayar']
-                        if isinstance(bukti, list): # Jika ada Before & After
+                        if isinstance(bukti, list): # Jika ada multiple foto (Before/After)
                             c1, c2 = st.columns(2)
-                            c1.image(bukti[0], caption="Before / Bukti 1", use_container_width=True)
-                            c2.image(bukti[1], caption="After / Bukti 2", use_container_width=True)
+                            c1.image(bukti[0], caption="Before", use_container_width=True)
+                            c2.image(bukti[1], caption="After", use_container_width=True)
                         elif bukti:
                             st.image(bukti, caption="Bukti Pembayaran", width=400)
                         
                         col_a, col_b = st.columns(2)
                         if col_a.button(f"Sahkan Pembayaran (ID:{idx})", key=f"y_{idx}"):
-                            df_total.at[idx, 'Status Denda'] = 'Lunas'
-                            df_total.to_excel(excel_file, index=False); st.rerun()
+                            df_total.at[idx, 'Status Denda'] = 'Lunas'; df_total.to_excel(excel_file, index=False); st.rerun()
                         if col_b.button(f"Tolak (ID:{idx})", key=f"n_{idx}"):
-                            df_total.at[idx, 'Status Denda'] = 'Belum Lunas'
-                            df_total.to_excel(excel_file, index=False); st.rerun()
+                            df_total.at[idx, 'Status Denda'] = 'Belum Lunas'; df_total.to_excel(excel_file, index=False); st.rerun()
             else: st.info("Tidak ada permintaan verifikasi.")
 
         with t1:
