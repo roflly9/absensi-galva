@@ -99,21 +99,15 @@ if st.session_state.page == 'Dashboard':
 
     st.markdown('<p class="section-title">Status & Ringkasan</p>', unsafe_allow_html=True)
     if not df_total.empty:
-        # Menghitung Total Dana Lunas
         total_setoran = df_total[df_total['Status Denda'] == 'Lunas']['Denda'].sum()
         st.metric("Total Dana Pembayaran Denda", f"Rp {total_setoran:,}")
 
-        # Menampilkan Grafik Terlambat per User (Sama seperti di Admin)
         if HAS_PLOTLY:
             telat_df = df_total[df_total['Status'] == 'TERLAMBAT']
             if not telat_df.empty:
                 st.markdown('<p style="font-size:13px; font-weight:bold; color:#0d47a1; margin-left:10px;">GRAFIK KETERLAMBATAN PER USER</p>', unsafe_allow_html=True)
-                # Group by Nama untuk melihat siapa yang paling sering telat
                 grafik_user = telat_df.groupby('Nama').size().reset_index(name='Total Telat')
-                fig = px.bar(grafik_user, x='Nama', y='Total Telat', 
-                             color='Total Telat', 
-                             color_continuous_scale='Reds',
-                             text_auto=True)
+                fig = px.bar(grafik_user, x='Nama', y='Total Telat', color='Total Telat', color_continuous_scale='Reds', text_auto=True)
                 fig.update_layout(margin=dict(l=20, r=20, t=10, b=20))
                 st.plotly_chart(fig, use_container_width=True)
             else:
@@ -121,34 +115,75 @@ if st.session_state.page == 'Dashboard':
     else:
         st.info("Belum ada data aktivitas.")
 
-# --- FORM ABSENSI ---
+# --- FORM ABSENSI (UPDATE SESUAI INSTRUKSI) ---
 elif st.session_state.page == 'Absensi':
     st.markdown('<div class="app-header">📝 FORM ABSENSI</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Menu"): navigasi('Dashboard')
     
     nama = st.selectbox("Nama Karyawan:", karyawan_list)
-    opsi = st.radio("Opsi Kehadiran:", ["Hadir di kantor", "Izin terlambat", "Tidak masuk kantor Cuti/Sakit", "Tugas Luar kota", "Langsung ke customer"], index=0)
+    opsi = st.radio("Opsi Kehadiran:", [
+        "Hadir di kantor", 
+        "Izin Terlambat", 
+        "Tidak masuk kantor Cuti/Sakit", 
+        "Tugas luar kota", 
+        "Langsung ke Customer"
+    ], index=0)
     
     waktu_skrg = datetime.now(timezone)
     batas_absen = datetime.strptime("08:05:00", "%H:%M:%S").time()
-    is_telat = (opsi == "Hadir di kantor" and waktu_skrg.time() > batas_absen)
     
-    if is_telat: card_class, st_text, dn_text, icon = "status-card terlambat", "TERLAMBAT", "Rp 10.000", "⚠️"
-    else: card_class, st_text, dn_text, icon = "status-card", opsi.upper(), "Rp 0", "✅"
+    # Inisialisasi variabel default
+    alasan = ""
+    img_data = None
+    denda_final = 0
+    st_text = ""
     
-    st.markdown(f"""<div class="{card_class}"><h2 style="margin:5px 0;">{waktu_skrg.strftime('%H:%M:%S')} WITA</h2><span>Status: <b>{icon} {st_text}</b></span> | <b>Denda: {dn_text}</b></div>""", unsafe_allow_html=True)
-    
-    img_selfie = st.camera_input("Ambil Foto Selfie Kehadiran")
-    
+    # Logika berdasarkan pilihan Opsi
+    if opsi == "Hadir di kantor":
+        is_telat = waktu_skrg.time() > batas_absen
+        st_text = "TERLAMBAT" if is_telat else "HADIR"
+        denda_final = 10000 if is_telat else 0
+        card_class = "status-card terlambat" if is_telat else "status-card"
+        icon = "⚠️" if is_telat else "✅"
+        
+        st.markdown(f"""<div class="{card_class}"><h2 style="margin:5px 0;">{waktu_skrg.strftime('%H:%M:%S')} WITA</h2><span>Status: <b>{icon} {st_text}</b></span> | <b>Denda: Rp {denda_final:,}</b></div>""", unsafe_allow_html=True)
+        img_capture = st.camera_input("Ambil Foto Selfie")
+        if img_capture: img_data = img_capture.getvalue()
+
+    elif opsi == "Izin Terlambat":
+        st_text = "IZIN TERLAMBAT"
+        alasan = st.text_area("Alasan Izin Terlambat:")
+        img_upload = st.file_uploader("Upload Bukti Foto Izin:", type=['jpg','png','jpeg'])
+        if img_upload: img_data = img_upload.getvalue()
+        
+    elif opsi == "Tidak masuk kantor Cuti/Sakit":
+        st_text = "CUTI/SAKIT"
+        alasan = st.text_area("Keterangan Cuti atau Sakit:")
+        img_upload = st.file_uploader("Upload Bukti Cuti/Surat Sakit:", type=['jpg','png','jpeg'])
+        if img_upload: img_data = img_upload.getvalue()
+
+    elif opsi == "Tugas luar kota":
+        st_text = "LUAR KOTA"
+        alasan = st.text_area("Keterangan Tugas di mana:")
+        img_upload = st.file_uploader("Upload Bukti Foto Tugas:", type=['jpg','png','jpeg'])
+        if img_upload: img_data = img_upload.getvalue()
+
+    elif opsi == "Langsung ke Customer":
+        st_text = "LANGSUNG KE CUSTOMER"
+        alasan = st.text_area("Keterangan di Customer mana:")
+        img_upload = st.file_uploader("Upload Bukti Foto di Customer:", type=['jpg','png','jpeg'])
+        if img_upload: img_data = img_upload.getvalue()
+
     if st.button("🚀 KIRIM ABSENSI"):
-        if nama == "Pilih Nama" or img_selfie is None:
-            st.error("Gagal! Pilih Nama dan Ambil Foto Selfie.")
+        if nama == "Pilih Nama":
+            st.error("Silahkan pilih Nama!")
+        elif img_data is None:
+            st.error("Wajib mengupload foto atau mengambil foto selfie!")
         else:
-            denda_final = 10000 if is_telat else 0
-            baru = pd.DataFrame([[waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"), nama, st_text, opsi, denda_final, "Belum Lunas" if denda_final > 0 else "Lunas", img_selfie.getvalue(), None]], columns=columns)
+            baru = pd.DataFrame([[waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"), nama, st_text, alasan, denda_final, "Belum Lunas" if denda_final > 0 else "Lunas", img_data, None]], columns=columns)
             df_total = pd.concat([df_total, baru], ignore_index=True)
             df_total.to_excel(excel_file, index=False)
-            st.balloons(); st.success("✅ Terkirim!"); time.sleep(2); navigasi('Dashboard')
+            st.balloons(); st.success("✅ Berhasil dikirim!"); time.sleep(2); navigasi('Dashboard')
 
 # --- MENU TEBUS ---
 elif st.session_state.page == 'Tebus':
