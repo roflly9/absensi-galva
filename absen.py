@@ -95,9 +95,16 @@ elif menu == "Tebus Denda":
     st.subheader("Penebusan Denda")
     nama_tebus = st.selectbox("Pilih Nama:", Karyawan_List)
     if nama_tebus != "Pilih Nama":
+        # Ambil daftar hutang yang beneran Belum Lunas (bukan yang sedang menunggu approval)
         idx_hutang = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas')].index
         total_hutang = df_total.loc[idx_hutang, 'Denda'].sum()
         
+        # Cek apakah ada yang sedang menunggu approval
+        menunggu_app = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'].str.contains("Menunggu", na=False))]
+        
+        if not menunggu_app.empty:
+            st.warning("⌛ Anda memiliki pengajuan penebusan yang sedang menunggu verifikasi Admin.")
+
         if total_hutang > 0:
             st.error(f"Total Tunggakan: Rp {total_hutang:,}")
             mode_tebus = st.radio("Opsi Pembayaran:", ["Tebus Semua", "Cicil Sebagian"])
@@ -110,7 +117,6 @@ elif menu == "Tebus Denda":
                 bt = st.file_uploader("Upload Bukti Bayar (JPG/PNG)", type=['jpg','png','jpeg'])
                 if bt: file_bukti.append(bt)
             else:
-                # PERUBAHAN DISINI: Sekarang menggunakan File Uploader untuk Before/After
                 st.info("Upload Foto Kondisi Sebelum dan Sesudah Membersihkan Kantor.")
                 f_seb = st.file_uploader("Upload Foto Sebelum (Before)", type=['jpg','png','jpeg'], key="before")
                 f_ses = st.file_uploader("Upload Foto Sesudah (After)", type=['jpg','png','jpeg'], key="after")
@@ -128,15 +134,17 @@ elif menu == "Tebus Denda":
                     terbayar = 0
                     for idx in idx_hutang:
                         if terbayar < jumlah_dibayar:
+                            # Status berubah menjadi MENUNGGU, bukan Lunas
                             df_total.at[idx, 'Status Denda'] = f"Menunggu Approval ({metode})"
                             df_total.at[idx, 'ID_Tebus'] = id_unik
                             terbayar += df_total.at[idx, 'Denda']
                     
                     df_total.to_excel(excel_file, index=False)
-                    st.info("✅ Pengajuan dikirim ke Admin.")
+                    st.info("✅ Pengajuan dikirim. Status Anda saat ini: Menunggu Persetujuan Admin.")
                     time.sleep(2); st.rerun()
         else:
-            st.success("Status: Bebas Denda.")
+            if menunggu_app.empty:
+                st.success("Status: Bebas Denda.")
 
 # --- HALAMAN ADMIN ---
 elif menu == "Login Admin":
@@ -147,20 +155,25 @@ elif menu == "Login Admin":
         with t1: # DASHBOARD
             st.subheader("Statistik Kehadiran")
             if not df_total.empty:
-                total_pemasukan = df_total[df_total['Status Denda'] == "Lunas (Verified) (Bayar Tunai / Transfer)"]['Denda'].sum()
+                # Filter untuk bulan berjalan saja (Metrik Dashboard Bulanan)
+                bulan_ini = datetime.now(timezone).strftime('%Y-%m')
+                df_bulan_ini = df_total[df_total['Tanggal'].str.startswith(bulan_ini)].copy()
+                
+                # Hitung pemasukan khusus bulan ini dari Cash/Transfer yang sudah Verified
+                pemasukan_bulan_ini = df_bulan_ini[df_bulan_ini['Status Denda'] == "Lunas (Verified) (Bayar Tunai / Transfer)"]['Denda'].sum()
                 
                 c1, c2, c3, c4 = st.columns(4)
                 c1.metric("Total Terlambat", len(df_total[df_total['Status'] == 'TERLAMBAT']))
-                c2.metric("Denda Belum Lunas", f"Rp {df_total[df_total['Status Denda'] == 'Belum Lunas']['Denda'].sum():,}")
+                c2.metric("Denda Belum Lunas (Total)", f"Rp {df_total[df_total['Status Denda'] == 'Belum Lunas']['Denda'].sum():,}")
                 c3.metric("Menunggu Verifikasi", len(df_total[df_total['Status Denda'].str.contains("Menunggu", na=False)]))
-                c4.metric("Total Pemasukan Cash", f"Rp {total_pemasukan:,}")
+                c4.metric(f"Pemasukan Cash ({datetime.now(timezone).strftime('%B')})", f"Rp {pemasukan_bulan_ini:,}")
                 
                 ca, cb = st.columns(2)
                 with ca:
-                    st.write("**Top Terlambat**")
+                    st.write("**Top Terlambat (Semua Waktu)**")
                     st.bar_chart(df_total[df_total['Status'] == 'TERLAMBAT'].groupby('Nama').size())
                 with cb:
-                    st.write("**Status Kehadiran**")
+                    st.write("**Status Kehadiran (Semua Waktu)**")
                     st.bar_chart(df_total.groupby('Status').size())
             else:
                 st.info("Belum ada data.")
@@ -188,6 +201,8 @@ elif menu == "Login Admin":
                             df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = final_status
                             df_total.to_excel(excel_file, index=False); st.rerun()
                         if st.button("Tolak", key=f"n_{id_t}"):
+                            # Jika ditolak kembali ke Belum Lunas
+                            df_total.loc[df_total['ID_Tebus'] == id_t, 'ID_Tebus'] = ""
                             df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = "Belum Lunas"
                             df_total.to_excel(excel_file, index=False); st.rerun()
 
@@ -204,6 +219,10 @@ elif menu == "Login Admin":
                         df_f[columns[:-1]].to_excel(writer, sheet_name='Data', index=False)
                         summary = df_f.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
                         summary.to_excel(writer, sheet_name='Grafik')
+                        # Tambahkan sheet rekap denda di Excel
+                        rekap_denda = df_f.groupby('Nama')['Denda'].sum().reset_index()
+                        rekap_denda.to_excel(writer, sheet_name='Rekap_Denda', index=False)
+                        
                         chart = writer.book.add_chart({'type': 'column'})
                         for i in range(len(summary.columns)):
                             chart.add_series({'name':['Grafik',0,i+1],'categories':['Grafik',1,0,len(summary),0],'values':['Grafik',1,i+1,len(summary),i+1]})
