@@ -17,7 +17,6 @@ st.markdown("""
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Container Utama Responsif */
     .block-container {
         max-width: 500px !important;
         padding: 0px !important;
@@ -28,7 +27,6 @@ st.markdown("""
         background-color: #f8f9fa;
     }
 
-    /* Banner Atas */
     .app-header {
         background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%);
         padding: 20px 10px;
@@ -50,58 +48,63 @@ st.markdown("""
         border-bottom-right-radius: 15px;
     }
 
-    /* CSS UNTUK FIX MENU TERPOTONG (GRID SYSTEM) */
+    /* FIX GRID: Memastikan kolom tidak turun ke bawah di HP */
     div[data-testid="stHorizontalBlock"] {
-        gap: 8px !important;
-        padding: 0 10px !important;
         display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 10px !important;
+        padding: 0 15px !important;
     }
 
     div[data-testid="column"] {
-        flex: 1 !important;
-        min-width: 0px !important; /* Menghindari konten memaksa kolom melebar */
+        flex: 1 1 50% !important;
+        min-width: 0px !important;
     }
 
-    /* Tombol Menu Adaptif */
+    /* Tombol Menu Kotak */
     div.stButton > button {
-        height: 100px !important; 
+        height: 120px !important; 
         width: 100% !important;
-        border-radius: 12px !important;
+        border-radius: 15px !important;
         border: none !important;
         color: white !important;
         font-weight: bold !important;
-        font-size: 11px !important; /* Font diperkecil sedikit agar tidak overflow */
+        font-size: 12px !important;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
-        white-space: pre-wrap !important; /* Membungkus teks jika terlalu panjang */
-        line-height: 1.2 !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1) !important;
+        white-space: pre-wrap !important;
     }
 
-    /* Warna Tombol Galva */
-    div.stButton:nth-of-type(1) > button { background: linear-gradient(135deg, #1e88e5, #1565c0) !important; } 
-    div.stButton:nth-of-type(2) > button { background: linear-gradient(135deg, #e53935, #c62828) !important; }
-    div.stButton:nth-of-type(3) > button { background: linear-gradient(135deg, #455a64, #263238) !important; }
+    /* Warna Tombol */
+    /* Tombol ke-1 (Mulai Absensi) - Biru */
+    div[data-testid="column"]:nth-of-type(1) div.stButton > button { 
+        background: linear-gradient(135deg, #1e88e5, #1565c0) !important; 
+    }
+    /* Tombol ke-2 (Tebus Denda) - Merah/Orange */
+    div[data-testid="column"]:nth-of-type(2) div.stButton > button { 
+        background: linear-gradient(135deg, #ff9800, #f57c00) !important; 
+    }
+    /* Tombol Admin Panel (Jika di baris baru) */
+    .admin-btn div.stButton > button {
+        background: linear-gradient(135deg, #455a64, #263238) !important;
+    }
 
     .section-title {
-        font-size: 14px;
+        font-size: 15px;
         font-weight: 800;
         color: #0d47a1;
-        margin: 15px 0px 8px 15px;
-        border-left: 4px solid #d32f2f;
+        margin: 20px 0px 10px 15px;
+        border-left: 5px solid #d32f2f;
         padding-left: 10px;
-    }
-
-    /* Perbaikan Tampilan Metric */
-    [data-testid="stMetricValue"] {
-        font-size: 20px !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SETUP DATA ---
+# --- (Bagian Setup Data Tetap Sama) ---
 timezone = pytz.timezone('Asia/Makassar')
 excel_file = "report_absensi.xlsx"
 folder_foto = "hasil_absen"
@@ -135,24 +138,28 @@ if st.session_state.page == 'Dashboard':
 
     st.markdown('<p class="section-title">Aktivitas Karyawan</p>', unsafe_allow_html=True)
 
-    # Menggunakan layout kolom yang dipaksa fleksibel
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📝\nMULAI\nABSENSI"): navigasi('Absensi')
-    with col2:
-        if st.button("💰\nTEBUS\nDENDA"): navigasi('Tebus')
+    # BARIS 1: Mulai Absensi (Kiri) & Tebus Denda (Kanan)
+    # Ini adalah kunci agar posisi tombol sesuai sketsa Anda
+    row1_col1, row1_col2 = st.columns(2)
+    with row1_col1:
+        if st.button("📝\n\nMULAI\nABSENSI"): navigasi('Absensi')
+    with row1_col2:
+        if st.button("💰\n\nTEBUS\nDENDA"): navigasi('Tebus')
 
     st.markdown('<p class="section-title">Menu Pengelola</p>', unsafe_allow_html=True)
     
-    col3, col4 = st.columns(2)
-    with col3:
-        if st.button("🔐\nADMIN\nPANEL"): navigasi('Admin')
-    with col4:
-        st.empty() 
+    # BARIS 2: Admin Panel
+    row2_col1, row2_col2 = st.columns(2)
+    with row2_col1:
+        st.markdown('<div class="admin-btn">', unsafe_allow_html=True)
+        if st.button("🔐\n\nADMIN\nPANEL"): navigasi('Admin')
+        st.markdown('</div>', unsafe_allow_html=True)
+    with row2_col2:
+        st.empty() # Biarkan kosong agar Admin tetap di kiri
 
-    # Statistik Ringkas
+    # Statistik
     if not df_total.empty:
-        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         total_terlambat = len(df_total[df_total['Status'] == 'TERLAMBAT'])
         hutang = df_total[df_total['Status Denda'] == 'Belum Lunas']['Denda'].sum()
         
@@ -160,7 +167,7 @@ if st.session_state.page == 'Dashboard':
         s1.metric("Terlambat", f"{total_terlambat}x")
         s2.metric("Tunggakan", f"Rp {hutang:,}")
 
-# --- HALAMAN LAINNYA ---
+# --- (Bagian Halaman Lainnya Tetap Sama) ---
 elif st.session_state.page == 'Absensi':
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
     st.subheader("📝 Form Absensi")
