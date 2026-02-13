@@ -101,6 +101,9 @@ st.markdown("""
     .status-card.terlambat {
         border-left: 10px solid #d32f2f;
     }
+    .status-card.izin {
+        border-left: 10px solid #ffa000;
+    }
 
     /* Metrics Style */
     div[data-testid="stMetric"] {
@@ -172,7 +175,7 @@ if st.session_state.page == 'Dashboard':
     else:
         st.info("Belum ada data aktivitas.")
 
-# --- B. FORM ABSENSI (MODIFIED) ---
+# --- B. FORM ABSENSI ---
 elif st.session_state.page == 'Absensi':
     st.markdown('<div class="app-header">📝 FORM ABSENSI</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Menu"): navigasi('Dashboard')
@@ -181,75 +184,115 @@ elif st.session_state.page == 'Absensi':
     nama = st.selectbox("Nama Karyawan:", karyawan)
     
     opsi = st.radio("Opsi Kehadiran:", [
-        "Hadir di kantor", "Izin terlambat", "Tidak masuk kantor Cuti/Sakit", 
-        "Tugas Luar kota", "Langsung ke customer"
-    ])
+        "Hadir di kantor", 
+        "Izin terlambat", 
+        "Tidak masuk kantor Cuti/Sakit", 
+        "Tugas Luar kota", 
+        "Langsung ke customer"
+    ], index=0)
     
-    # Logika Denda & Waktu
+    # Logika Waktu & Denda
     waktu_skrg = datetime.now(timezone)
     jam_skrg = waktu_skrg.time()
     batas_absen = datetime.strptime("08:05:00", "%H:%M:%S").time()
     
     is_telat = (opsi == "Hadir di kantor" and jam_skrg > batas_absen)
+    is_izin = (opsi in ["Izin terlambat", "Tidak masuk kantor Cuti/Sakit"])
     
-    # KOTAK STATUS TERPADU
-    status_class = "status-card terlambat" if is_telat else "status-card"
-    status_text = "TERLAMBAT" if is_telat else "TEPAT WAKTU"
-    denda_text = "Rp 10.000" if is_telat else "Rp 0"
-    
+    # KOTAK STATUS TERPADU (UI)
+    if is_telat:
+        card_class = "status-card terlambat"
+        st_text, dn_text, icon = "TERLAMBAT", "Rp 10.000", "⚠️"
+    elif is_izin:
+        card_class = "status-card izin"
+        st_text, dn_text, icon = "IZIN / CUTI", "Rp 0", "ℹ️"
+    else:
+        card_class = "status-card"
+        st_text, dn_text, icon = "TEPAT WAKTU / DINAS", "Rp 0", "✅"
+
     st.markdown(f"""
-        <div class="{status_class}">
+        <div class="{card_class}">
             <p style="margin:0; font-size:11px; color:#666; font-weight:bold;">SISTEM ABSENSI OTOMATIS</p>
             <h2 style="margin:5px 0; color:#0d47a1;">{waktu_skrg.strftime('%H:%M:%S')} <span style="font-size:14px;">WITA</span></h2>
             <div style="display:flex; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:1px solid #eee;">
-                <span>Status: <b>{'⚠️' if is_telat else '✅'} {status_text}</b></span>
-                <span style="color:{'#d32f2f' if is_telat else '#2e7d32'}; font-weight:bold;">Denda: {denda_text}</span>
+                <span>Status: <b>{icon} {st_text}</b></span>
+                <span style="font-weight:bold;">Denda: {dn_text}</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-    img = st.camera_input("Ambil Foto Selfie")
+    # Kolom Tambahan untuk Izin/Cuti
+    alasan_val = ""
+    foto_bukti = None
+    if is_izin:
+        st.markdown("---")
+        st.subheader("📌 Form Izin/Cuti")
+        alasan_val = st.text_area("Masukkan Alasan / Keterangan:", placeholder="Contoh: Sakit demam, Izin urusan keluarga, dll")
+        foto_bukti = st.file_uploader("Upload Foto Bukti (Surat Dokter/Lainnya):", type=['jpg', 'jpeg', 'png'])
+
+    # Selfie Kamera
+    img_selfie = st.camera_input("Ambil Foto Selfie")
     
     if st.button("🚀 KIRIM ABSENSI"):
-        if nama != "Pilih Nama" and img:
-            denda_val = 10000 if is_telat else 0
-            status_final = "TERLAMBAT" if is_telat else opsi.upper()
+        # Validasi
+        if nama == "Pilih Nama":
+            st.error("Gagal! Pilih Nama terlebih dahulu.")
+        elif not img_selfie:
+            st.error("Gagal! Foto selfie wajib diambil.")
+        elif is_izin and (not alasan_val or not foto_bukti):
+            st.error("Gagal! Untuk Izin/Cuti, Alasan dan Foto Bukti wajib diisi.")
+        else:
+            # Hitung denda & status akhir
+            denda_final = 10000 if is_telat else 0
+            status_simpan = "TERLAMBAT" if is_telat else opsi.upper()
+            alasan_simpan = alasan_val if is_izin else opsi
             
+            # Simpan ke DataFrame
             data_baru = pd.DataFrame([[
-                waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"),
-                nama, status_final, opsi, denda_val, 
-                "Belum Lunas" if denda_val > 0 else "Lunas"
+                waktu_skrg.date(), 
+                waktu_skrg.strftime("%H:%M:%S"),
+                nama, 
+                status_simpan, 
+                alasan_simpan, 
+                denda_final, 
+                "Belum Lunas" if denda_final > 0 else "Lunas"
             ]], columns=columns)
             
             df_total = pd.concat([df_total, data_baru], ignore_index=True)
             df_total.to_excel(excel_file, index=False)
             
+            # Notifikasi Sukses
             st.balloons()
-            st.success(f"Berhasil! Data {nama} tersimpan.")
+            st.success(f"✅ Berhasil! Absensi {nama} sudah masuk sistem.")
             time.sleep(2)
             navigasi('Dashboard')
-        else:
-            st.error("Lengkapi Nama dan Foto terlebih dahulu!")
 
 # --- C. TEBUS DENDA ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
     
-    st.markdown("### Daftar Belum Lunas")
+    st.markdown("### Ringkasan Tunggakan")
     if not df_total.empty:
-        df_hutang = df_total[df_total['Status Denda'] == 'Belum Lunas']
-        if not df_hutang.empty:
-            st.table(df_hutang[['Tanggal', 'Nama', 'Denda']])
+        df_tunggak = df_total[df_total['Status Denda'] == 'Belum Lunas']
+        if not df_tunggak.empty:
+            st.warning(f"Total tunggakan Anda: Rp {df_tunggak['Denda'].sum():,}")
+            st.dataframe(df_tunggak[['Tanggal', 'Nama', 'Status', 'Denda']], use_container_width=True)
         else:
-            st.success("Semua denda sudah lunas!")
+            st.success("Hebat! Tidak ada tunggakan denda.")
+    else:
+        st.info("Data masih kosong.")
 
 # --- D. ADMIN PANEL ---
 elif st.session_state.page == 'Admin':
     st.markdown('<div class="app-header">🔐 ADMIN PANEL</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
     
-    pw = st.text_input("Password Admin:", type="password")
-    if pw == "galva123":
+    pswd = st.text_input("Password Admin:", type="password")
+    if pswd == "galva123":
+        st.write("### Rekap Seluruh Data Karyawan")
         st.dataframe(df_total, use_container_width=True)
-        # Tombol konfirmasi bayar bisa ditambahkan di sini
+        
+        # Fitur konfirmasi bayar manual bisa ditaruh di sini
+        st.divider()
+        st.download_button("📊 Download Laporan Excel", data=open(excel_file, "rb"), file_name="rekap_absensi_galva.xlsx")
