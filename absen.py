@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import pytz 
 import time
+import io
 
 # --- PENGAMAN LIBRARY GRAFIK ---
 try:
@@ -68,7 +69,6 @@ st.markdown("""
 # --- 2. ENGINE DATA ---
 timezone = pytz.timezone('Asia/Makassar')
 excel_file = "report_absensi.xlsx"
-# Kolom di Excel sekarang hanya menyimpan PATH/NAMA FILE foto, bukan binernya
 columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda", "Status Denda", "Foto_Path", "Bukti_Path"]
 karyawan_list = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"]
 
@@ -154,12 +154,9 @@ elif st.session_state.page == 'Absensi':
         if nama == "Pilih Nama": st.error("Silahkan pilih Nama!")
         elif img_data is None: st.error("Wajib lampirkan foto!")
         else:
-            # SIMPAN FILE KE FOLDER img_data
             file_name = f"img_data/ABS_{nama}_{waktu_skrg.strftime('%Y%m%d_%H%M%S')}.jpg"
-            with open(file_name, "wb") as f:
-                f.write(img_data)
+            with open(file_name, "wb") as f: f.write(img_data)
             
-            # SIMPAN PATH KE EXCEL
             baru = pd.DataFrame([[waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"), nama, st_text, alasan, denda_final, "Belum Lunas" if denda_final > 0 else "Lunas", file_name, None]], columns=columns)
             df_total = pd.concat([df_total, baru], ignore_index=True)
             df_total.to_excel(excel_file, index=False, engine='openpyxl')
@@ -192,7 +189,6 @@ elif st.session_state.page == 'Tebus':
             if st.button("✅ KONFIRMASI"):
                 if not bukti_files: st.error("Upload bukti foto!")
                 else:
-                    # Simpan File Bukti
                     paths = []
                     for bf in bukti_files:
                         path_bukti = f"img_data/TBS_{user_pilih}_{int(time.time())}.jpg"
@@ -228,6 +224,42 @@ elif st.session_state.page == 'Admin':
     if st.session_state.admin_logged_in:
         t1, t2, t3, t4, t5 = st.tabs(["📈 TREN", "📊 DATA", "✅ VERIFIKASI", "📸 FOTO", "⚙️ RESET"])
         
+        with t1:
+            if HAS_PLOTLY and not df_total.empty:
+                telat_df = df_total[df_total['Status'] == 'TERLAMBAT']
+                if not telat_df.empty:
+                    grafik = px.bar(telat_df.groupby('Tanggal').size().reset_index(name='Jumlah'), x='Tanggal', y='Jumlah')
+                    st.plotly_chart(grafik, use_container_width=True)
+
+        with t2: # --- PERBAIKAN BAGIAN TAB DATA ---
+            if not df_total.empty:
+                df_temp = df_total.copy()
+                df_temp['Tanggal'] = pd.to_datetime(df_temp['Tanggal'])
+                df_temp['Bulan_Tahun'] = df_temp['Tanggal'].dt.strftime('%B %Y')
+                list_bulan = sorted(df_temp['Bulan_Tahun'].unique().tolist(), reverse=True)
+                
+                c1, c2 = st.columns([2, 2])
+                bulan_pilih = c1.selectbox("Pilih Bulan Rekap:", list_bulan)
+                
+                df_filtered = df_temp[df_temp['Bulan_Tahun'] == bulan_pilih].copy()
+                df_display = df_filtered.drop(columns=['Foto_Path', 'Bukti_Path', 'Bulan_Tahun'], errors='ignore')
+                
+                st.write(f"### Laporan Bulan: {bulan_pilih}")
+                st.dataframe(df_display, use_container_width=True)
+                
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    df_display.to_excel(writer, index=False, sheet_name='Rekap_Bulanan')
+                
+                st.download_button(
+                    label=f"📥 Download Excel - {bulan_pilih}",
+                    data=buffer.getvalue(),
+                    file_name=f"rekap_galva_{bulan_pilih.replace(' ', '_')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.info("Belum ada data untuk ditampilkan.")
+
         with t3: # VERIFIKASI
             pending = df_total[df_total['Status Denda'] == 'Menunggu Persetujuan']
             if not pending.empty:
@@ -251,21 +283,8 @@ elif st.session_state.page == 'Admin':
                         if col_b.button(f"Tolak (ID:{idx})", key=f"n_{idx}"):
                             df_total.at[idx, 'Status Denda'] = 'Belum Lunas'; df_total.to_excel(excel_file, index=False); st.rerun()
             else: st.info("Tidak ada verifikasi.")
-
-        with t1:
-            if HAS_PLOTLY and not df_total.empty:
-                telat_df = df_total[df_total['Status'] == 'TERLAMBAT']
-                if not telat_df.empty:
-                    grafik = px.bar(telat_df.groupby('Tanggal').size().reset_index(name='Jumlah'), x='Tanggal', y='Jumlah')
-                    st.plotly_chart(grafik, use_container_width=True)
         
-        with t2:
-            # REKAPAN EXCEL BERSIH (TANPA PATH FOTO)
-            df_view = df_total.drop(columns=['Foto_Path', 'Bukti_Path'], errors='ignore')
-            st.dataframe(df_view, use_container_width=True)
-            st.download_button("📥 Download Excel", data=open(excel_file, "rb").read(), file_name="rekap_galva.xlsx")
-        
-        with t4: # TAB FOTO - MEMANGGIL FILE DARI FOLDER img_data
+        with t4: # TAB FOTO
             if os.path.exists("img_data"):
                 files = sorted([os.path.join("img_data", f) for f in os.listdir("img_data") if f.startswith("ABS_")], reverse=True)
                 if files:
@@ -273,7 +292,6 @@ elif st.session_state.page == 'Admin':
                         cols = st.columns(4)
                         for j, fpath in enumerate(files[i:i+4]):
                             try:
-                                # Ambil info dari nama file: ABS_Nama_Tanggal_Jam.jpg
                                 fname = os.path.basename(fpath).replace(".jpg","").split("_")
                                 caption = f"{fname[1]} | {fname[2]}"
                                 with cols[j]: st.image(fpath, caption=caption, use_container_width=True)
