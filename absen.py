@@ -101,6 +101,7 @@ st.markdown("""
     .status-card.terlambat { border-left: 10px solid #d32f2f; }
     .status-card.izin { border-left: 10px solid #ffa000; }
     .status-card.dinas { border-left: 10px solid #1976d2; }
+    .status-card.customer { border-left: 10px solid #333333; }
 
     /* --- STYLING INPUT WAJIB --- */
     /* Merah untuk Izin/Cuti */
@@ -111,6 +112,11 @@ st.markdown("""
     /* Biru untuk Dinas */
     .dinas-isi textarea {
         border: 2px solid #1976d2 !important;
+        border-radius: 10px !important;
+    }
+    /* Hitam untuk Customer */
+    .customer-isi textarea {
+        border: 2px solid #333333 !important;
         border-radius: 10px !important;
     }
 
@@ -203,8 +209,9 @@ elif st.session_state.page == 'Absensi':
     is_izin_terlambat = (opsi == "Izin terlambat")
     is_cuti_sakit = (opsi == "Tidak masuk kantor Cuti/Sakit")
     is_tugas_luar = (opsi == "Tugas Luar kota")
+    is_ke_customer = (opsi == "Langsung ke customer")
     
-    # LOGIKA STATUS UNTUK DISPLAY
+    # STATUS CARD SETTINGS
     if is_telat:
         card_class, st_text, dn_text, icon = "status-card terlambat", "TERLAMBAT", "Rp 10.000", "⚠️"
     elif is_izin_terlambat:
@@ -213,6 +220,8 @@ elif st.session_state.page == 'Absensi':
         card_class, st_text, dn_text, icon = "status-card izin", "CUTI / SAKIT", "Rp 0", "ℹ️"
     elif is_tugas_luar:
         card_class, st_text, dn_text, icon = "status-card dinas", "DINAS LUAR KOTA", "Rp 0", "✈️"
+    elif is_ke_customer:
+        card_class, st_text, dn_text, icon = "status-card customer", "LANGSUNG KE CUSTOMER", "Rp 0", "🚗"
     else:
         card_class, st_text, dn_text, icon = "status-card", "HADIR TEPAT WAKTU", "Rp 0", "✅"
 
@@ -227,57 +236,56 @@ elif st.session_state.page == 'Absensi':
         </div>
     """, unsafe_allow_html=True)
 
-    alasan_val = ""
-    foto_bukti = None
-    img_selfie = None
-    lokasi_dinas = ""
+    alasan_val, foto_bukti, img_selfie, lokasi_ket = "", None, None, ""
 
-    # KONDISI INPUT BERDASARKAN OPSI
+    # DYNAMIC INPUTS
     if is_izin_terlambat or is_cuti_sakit:
         st.markdown('<div class="wajib-isi">', unsafe_allow_html=True)
-        st.error("WAJIB: Isi alasan dan upload foto bukti (Kotak Merah).")
-        alasan_val = st.text_area("Alasan Ijin/Cuti:")
+        st.error("WAJIB: Isi alasan & upload bukti (Kotak Merah).")
+        alasan_val = st.text_area("Masukkan Alasan:")
         foto_bukti = st.file_uploader("Upload Foto Bukti:", type=['jpg', 'jpeg', 'png', 'pdf'])
         st.markdown('</div>', unsafe_allow_html=True)
         
     elif is_tugas_luar:
         st.markdown('<div class="dinas-isi">', unsafe_allow_html=True)
-        st.info("KETERANGAN: Sebutkan lokasi penugasan Anda (Kotak Biru).")
-        lokasi_dinas = st.text_area("Sedang dinas di mana?", placeholder="Contoh: Dinas di Jakarta Utara...")
+        st.info("KETERANGAN: Lokasi Penugasan (Kotak Biru).")
+        lokasi_ket = st.text_area("Sedang dinas di mana?", placeholder="Contoh: Dinas di Tondano...")
         st.markdown('</div>', unsafe_allow_html=True)
+
+    elif is_ke_customer:
+        st.markdown('<div class="customer-isi">', unsafe_allow_html=True)
+        st.write("🏢 **INPUT CUSTOMER:**")
+        lokasi_ket = st.text_area("Ke customer mana hari ini?", placeholder="Contoh: Ke Bank SulutGo...")
+        st.markdown('</div>', unsafe_allow_html=True)
+        img_selfie = st.camera_input("Ambil Foto Selfie di Lokasi Customer")
         
     else:
-        # Hadir di kantor atau Langsung ke customer
+        # Hadir di kantor normal/telat
         img_selfie = st.camera_input("Ambil Foto Selfie Kehadiran")
 
     if st.button("🚀 KIRIM ABSENSI"):
         if nama == "Pilih Nama":
-            st.error("Gagal! Pilih Nama terlebih dahulu.")
+            st.error("Gagal! Pilih Nama Anda.")
         elif (is_izin_terlambat or is_cuti_sakit) and (not alasan_val or not foto_bukti):
-            st.error("Gagal! Alasan dan Foto Bukti tidak boleh kosong.")
-        elif is_tugas_luar and not lokasi_dinas:
-            st.error("Gagal! Keterangan lokasi dinas wajib diisi.")
+            st.error("Gagal! Alasan dan Bukti wajib diisi.")
+        elif is_tugas_luar and not lokasi_ket:
+            st.error("Gagal! Keterangan dinas wajib diisi.")
+        elif is_ke_customer and (not lokasi_ket or not img_selfie):
+            st.error("Gagal! Nama customer & Foto Selfie wajib.")
         elif (not is_izin_terlambat and not is_cuti_sakit and not is_tugas_luar) and not img_selfie:
             st.error("Gagal! Foto selfie wajib diambil.")
         else:
             denda_final = 10000 if is_telat else 0
-            status_final = st_text
             
-            # Formating alasan untuk database
-            if is_tugas_luar:
-                alasan_simpan = f"Lokasi: {lokasi_dinas}"
-            elif is_izin_terlambat or is_cuti_sakit:
-                alasan_simpan = alasan_val
-            else:
-                alasan_simpan = opsi
+            # Format Alasan Simpan
+            if is_tugas_luar: alasan_simpan = f"Dinas: {lokasi_ket}"
+            elif is_ke_customer: alasan_simpan = f"Customer: {lokasi_ket}"
+            elif is_izin_terlambat or is_cuti_sakit: alasan_simpan = alasan_val
+            else: alasan_simpan = opsi
             
             data_baru = pd.DataFrame([[
-                waktu_skrg.date(), 
-                waktu_skrg.strftime("%H:%M:%S"),
-                nama, 
-                status_final, 
-                alasan_simpan, 
-                denda_final, 
+                waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"),
+                nama, st_text, alasan_simpan, denda_final, 
                 "Belum Lunas" if denda_final > 0 else "Lunas"
             ]], columns=columns)
             
@@ -285,32 +293,27 @@ elif st.session_state.page == 'Absensi':
             df_total.to_excel(excel_file, index=False)
             
             st.balloons()
-            st.success(f"✅ Berhasil! Absensi {nama} sebagai {status_final} telah terkirim.")
+            st.success(f"✅ Terkirim! Status: {st_text}")
             time.sleep(2)
             navigasi('Dashboard')
 
 # --- C. TEBUS DENDA ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 TEBUS DENDA</div>', unsafe_allow_html=True)
-    if st.button("⬅️ Kembali ke Dashboard"): navigasi('Dashboard')
+    if st.button("⬅️ Dashboard"): navigasi('Dashboard')
     if not df_total.empty:
         df_tunggak = df_total[df_total['Status Denda'] == 'Belum Lunas']
         if not df_tunggak.empty:
-            st.warning(f"Total tunggakan belum dibayar: Rp {df_tunggak['Denda'].sum():,}")
-            st.dataframe(df_tunggak[['Tanggal', 'Nama', 'Status', 'Denda']], use_container_width=True)
-        else:
-            st.success("Semua denda sudah lunas!")
-    else:
-        st.info("Belum ada data.")
+            st.warning(f"Total Tunggakan: Rp {df_tunggak['Denda'].sum():,}")
+            st.dataframe(df_tunggak[['Tanggal', 'Nama', 'Denda']], use_container_width=True)
+        else: st.success("Semua lunas!")
+    else: st.info("Tidak ada data.")
 
 # --- D. ADMIN PANEL ---
 elif st.session_state.page == 'Admin':
     st.markdown('<div class="app-header">🔐 ADMIN PANEL</div>', unsafe_allow_html=True)
-    if st.button("⬅️ Kembali ke Dashboard"): navigasi('Dashboard')
+    if st.button("⬅️ Dashboard"): navigasi('Dashboard')
     pswd = st.text_input("Password Admin:", type="password")
     if pswd == "galva123":
-        st.write("### Rekap Seluruh Data")
         st.dataframe(df_total, use_container_width=True)
-        st.divider()
-        if os.path.exists(excel_file):
-            st.download_button("📊 Download Laporan Excel", data=open(excel_file, "rb"), file_name="rekap_absensi_galva.xlsx")
+        st.download_button("📊 Download Excel", data=open(excel_file, "rb"), file_name="rekap_absensi.xlsx")
