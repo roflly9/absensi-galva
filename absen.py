@@ -89,7 +89,7 @@ st.markdown("""
         border-radius: 3px;
     }
 
-    /* Kotak Status Terpadu */
+    /* Kotak Status */
     .status-card {
         background: white;
         padding: 20px;
@@ -99,21 +99,7 @@ st.markdown("""
         margin: 15px 0;
     }
     .status-card.terlambat { border-left: 10px solid #d32f2f; }
-    .status-card.izin { border-left: 10px solid #ffa000; }
-    .status-card.dinas { border-left: 10px solid #1976d2; }
-    .status-card.customer { border-left: 10px solid #333333; }
-
-    /* --- STYLING INPUT WAJIB --- */
-    .wajib-isi textarea { border: 2px solid #d32f2f !important; border-radius: 10px !important; }
-    .dinas-isi textarea { border: 2px solid #1976d2 !important; border-radius: 10px !important; }
-    .customer-isi textarea { border: 2px solid #333333 !important; border-radius: 10px !important; }
-
-    div[data-testid="stFileUploader"] {
-        border: 2px dashed #d32f2f !important;
-        padding: 10px !important;
-        border-radius: 10px !important;
-        background-color: #fff5f5 !important;
-    }
+    .status-card.tunggu { border-left: 10px solid #ffa000; }
 
     div[data-testid="stMetric"] {
         background: white !important;
@@ -147,7 +133,7 @@ def navigasi(page_name):
 
 # --- 3. LOGIKA HALAMAN ---
 
-# --- A. DASHBOARD (TIDAK BERUBAH) ---
+# --- A. DASHBOARD (FIXED) ---
 if st.session_state.page == 'Dashboard':
     st.markdown('<div class="app-header">🏢 GALVA MANADO</div>', unsafe_allow_html=True)
     st.markdown('<div class="welcome-box">PRESENSI & DENDA</div>', unsafe_allow_html=True)
@@ -174,7 +160,7 @@ if st.session_state.page == 'Dashboard':
     else:
         st.info("Belum ada data aktivitas.")
 
-# --- B. FORM ABSENSI (TIDAK BERUBAH) ---
+# --- B. FORM ABSENSI (FIXED) ---
 elif st.session_state.page == 'Absensi':
     st.markdown('<div class="app-header">📝 FORM ABSENSI</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Menu"): navigasi('Dashboard')
@@ -204,18 +190,12 @@ elif st.session_state.page == 'Absensi':
     alasan_val, foto_bukti, img_selfie, lokasi_ket = "", None, None, ""
 
     if is_izin_terlambat or is_cuti_sakit:
-        st.markdown('<div class="wajib-isi">', unsafe_allow_html=True)
         alasan_val = st.text_area("Masukkan Alasan:")
         foto_bukti = st.file_uploader("Upload Foto Bukti:", type=['jpg', 'jpeg', 'png', 'pdf'])
-        st.markdown('</div>', unsafe_allow_html=True)
     elif is_tugas_luar:
-        st.markdown('<div class="dinas-isi">', unsafe_allow_html=True)
         lokasi_ket = st.text_area("Sedang dinas di mana?", placeholder="Contoh: Dinas di Tondano...")
-        st.markdown('</div>', unsafe_allow_html=True)
     elif is_ke_customer:
-        st.markdown('<div class="customer-isi">', unsafe_allow_html=True)
         lokasi_ket = st.text_area("Ke customer mana hari ini?", placeholder="Contoh: Ke Bank SulutGo...")
-        st.markdown('</div>', unsafe_allow_html=True)
         img_selfie = st.camera_input("Ambil Foto Selfie di Lokasi Customer")
     else:
         img_selfie = st.camera_input("Ambil Foto Selfie Kehadiran")
@@ -230,61 +210,90 @@ elif st.session_state.page == 'Absensi':
             df_total.to_excel(excel_file, index=False)
             st.balloons(); st.success(f"✅ Terkirim! Status: {st_text}"); time.sleep(2); navigasi('Dashboard')
 
-# --- C. TEBUS DENDA (PERUBAHAN TOTAL SESUAI REQUEST) ---
+# --- C. TEBUS DENDA (NOMINAL & STATUS MENUNGGU) ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 MENU TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Dashboard"): navigasi('Dashboard')
     
-    st.markdown('<p class="section-title">Cek Total Tunggakan</p>', unsafe_allow_html=True)
-    user_pilih = st.selectbox("Pilih Nama Anda:", karyawan_list)
+    st.markdown('<p class="section-title">Pilih Nama untuk Cek Denda</p>', unsafe_allow_html=True)
+    user_pilih = st.selectbox("Nama Karyawan:", karyawan_list)
     
     if user_pilih != "Pilih Nama":
-        # Ambil data denda user yang "Belum Lunas"
         user_df = df_total[(df_total['Nama'] == user_pilih) & (df_total['Status Denda'] == 'Belum Lunas')]
         total_denda_user = user_df['Denda'].sum()
         
         if total_denda_user > 0:
             st.markdown(f"""
-                <div style="background: white; padding: 25px; border-radius: 15px; border-left: 10px solid #d32f2f; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px;">
-                    <p style="margin:0; font-weight:bold; color:gray;">TOTAL TUNGGAKAN {user_pilih.upper()}</p>
-                    <h1 style="color: #d32f2f; margin: 10px 0;">Rp {total_denda_user:,}</h1>
-                    <p style="margin:0; font-size: 13px; color: #555;">Ditemukan {len(user_df)} catatan denda yang belum dibayar.</p>
+                <div class="status-card terlambat">
+                    <p style="margin:0; font-weight:bold; color:gray;">TOTAL TUNGGAKAN</p>
+                    <h2 style="color:#d32f2f; margin:5px 0;">Rp {total_denda_user:,}</h2>
                 </div>
             """, unsafe_allow_html=True)
             
-            st.markdown('<p class="section-title">Pilih Metode Tebus</p>', unsafe_allow_html=True)
-            metode = st.radio("Metode Penebusan:", ["Bayar Cash", "Transfer Bank", "Membersihkan Kantor"])
+            metode = st.radio("Pilih Metode Penebusan:", ["Bayar Cash/Transfer", "Membersihkan Kantor"])
             
-            if metode == "Transfer Bank":
-                st.info("Silahkan transfer ke Rekening Admin dan upload bukti transfer di bawah ini.")
-                bukti_tf = st.file_uploader("Upload Foto Bukti Transfer:", type=['jpg','png','jpeg'])
+            nominal_tebus = st.number_input(f"Jumlah yang ingin dibayar (Min. 10.000)", 
+                                           min_value=10000, 
+                                           max_value=int(total_denda_user), 
+                                           step=10000)
             
-            elif metode == "Membersihkan Kantor":
-                st.warning("Syarat: Ambil foto area kantor SEBELUM dan SESUDAH dibersihkan.")
+            bukti = None
+            if metode == "Bayar Cash/Transfer":
+                st.info("Harap upload foto uang cash atau screenshot bukti transfer.")
+                bukti = st.file_uploader("Upload Bukti Pembayaran:", type=['jpg','png','jpeg'])
+            else:
+                st.warning("Harap ambil foto area kantor Sebelum & Sesudah dibersihkan.")
                 col1, col2 = st.columns(2)
-                with col1: foto_before = st.camera_input("📸 Foto SEBELUM")
-                with col2: foto_after = st.camera_input("📸 Foto SESUDAH")
-            
-            if st.button("✅ KONFIRMASI PENEBUSAN"):
-                if metode == "Transfer Bank" and not bukti_tf:
-                    st.error("Gagal! Bukti transfer wajib diunggah.")
-                elif metode == "Membersihkan Kantor" and (not foto_before or not foto_after):
-                    st.error("Gagal! Foto Before dan After wajib diambil.")
-                else:
-                    st.success(f"Permintaan tebus denda {user_pilih} via {metode} telah dikirim ke Admin untuk divalidasi.")
-                    time.sleep(3)
-                    navigasi('Dashboard')
-        else:
-            st.balloons()
-            st.success(f"Luar biasa! {user_pilih} tidak memiliki tunggakan denda. Tetap pertahankan disiplin!")
+                with col1: f_before = st.camera_input("📸 Foto SEBELUM")
+                with col2: f_after = st.camera_input("📸 Foto SESUDAH")
+                if f_before and f_after:
+                    bukti = True
 
-# --- D. ADMIN PANEL ---
+            if st.button("✅ KONFIRMASI PENEBUSAN"):
+                if not bukti:
+                    st.error("Gagal! Bukti (Foto/File) wajib dilampirkan.")
+                else:
+                    # Update baris denda yang belum lunas menjadi 'Menunggu Persetujuan'
+                    indices = df_total[(df_total['Nama'] == user_pilih) & (df_total['Status Denda'] == 'Belum Lunas')].index
+                    
+                    bayar_temp = 0
+                    for idx in indices:
+                        if bayar_temp < nominal_tebus:
+                            df_total.at[idx, 'Status Denda'] = 'Menunggu Persetujuan'
+                            bayar_temp += df_total.at[idx, 'Denda']
+                    
+                    df_total.to_excel(excel_file, index=False)
+                    st.success("Berhasil! Status denda Anda kini: 'Menunggu Persetujuan Admin'.")
+                    time.sleep(3); navigasi('Dashboard')
+        else:
+            st.success(f"Disiplin Mantap! {user_pilih} tidak memiliki tunggakan denda.")
+
+# --- D. ADMIN PANEL (ACC MENU) ---
 elif st.session_state.page == 'Admin':
     st.markdown('<div class="app-header">🔐 ADMIN PANEL</div>', unsafe_allow_html=True)
     if st.button("⬅️ Dashboard"): navigasi('Dashboard')
     pswd = st.text_input("Password Admin:", type="password")
+    
     if pswd == "galva123":
-        st.write("### Rekap Seluruh Data")
-        st.dataframe(df_total, use_container_width=True)
-        if st.divider():
-            st.download_button("📊 Download Excel", data=open(excel_file, "rb"), file_name="rekap_absensi_galva.xlsx")
+        tab_rekap, tab_acc = st.tabs(["📊 SEMUA DATA", "✅ ACC PEMBAYARAN"])
+        
+        with tab_rekap:
+            st.dataframe(df_total, use_container_width=True)
+            st.download_button("📊 Download Excel", data=open(excel_file, "rb"), file_name="rekap_absensi.xlsx")
+            
+        with tab_acc:
+            df_tunggu = df_total[df_total['Status Denda'] == 'Menunggu Persetujuan']
+            if not df_tunggu.empty:
+                st.warning(f"Terdapat {len(df_tunggu)} baris denda menunggu persetujuan.")
+                st.dataframe(df_tunggu[['Tanggal', 'Nama', 'Status', 'Denda']], use_container_width=True)
+                
+                list_nama_tunggu = df_tunggu['Nama'].unique()
+                acc_nama = st.selectbox("Pilih Nama untuk di-ACC:", list_nama_tunggu)
+                
+                if st.button(f"Sahkan Pembayaran {acc_nama}"):
+                    df_total.loc[(df_total['Nama'] == acc_nama) & (df_total['Status Denda'] == 'Menunggu Persetujuan'), 'Status Denda'] = 'Lunas'
+                    df_total.to_excel(excel_file, index=False)
+                    st.success(f"Pembayaran {acc_nama} telah disahkan (Lunas).")
+                    time.sleep(1); st.rerun()
+            else:
+                st.info("Tidak ada pengajuan penebusan denda saat ini.")
