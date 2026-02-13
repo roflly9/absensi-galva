@@ -39,20 +39,11 @@ Karyawan_List = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "R
 # --- HALAMAN ABSENSI ---
 if menu == "Absensi Karyawan":
     nama = st.selectbox("Pilih Nama Anda:", Karyawan_List)
-    
-    # Update Pilihan Sesuai Permintaan
-    opsi_absen = st.radio("Tipe Kehadiran:", [
-        "Hadir di Kantor", 
-        "Izin Terlambat", 
-        "Tidak Masuk Kantor Cuti/Sakit", 
-        "Tugas Luar Kota"
-    ])
+    opsi_absen = st.radio("Tipe Kehadiran:", ["Hadir di Kantor", "Izin Terlambat", "Tidak Masuk Kantor Cuti/Sakit", "Tugas Luar Kota"])
 
-    # Logika Cek Waktu Real-time untuk Feedback
     waktu_sekarang = datetime.now(timezone)
     jam_skrg = waktu_sekarang.strftime("%H:%M:%S")
     
-    # Feedback Visual Sebelum Simpan
     if nama != "Pilih Nama":
         st.info(f"Jam Sekarang: **{jam_skrg}**")
         if opsi_absen == "Hadir di Kantor":
@@ -61,7 +52,6 @@ if menu == "Absensi Karyawan":
             else:
                 st.success("✅ Status: **TEPAT WAKTU**")
 
-    # Input Tambahan Berdasarkan Opsi
     alasan = ""
     if opsi_absen == "Tugas Luar Kota":
         alasan = st.text_input("📍 Masukkan Lokasi/Tujuan Tugas:")
@@ -74,14 +64,12 @@ if menu == "Absensi Karyawan":
     else:
         img_file = st.file_uploader("Upload Bukti (Opsional)", type=['jpg', 'jpeg', 'png', 'pdf'])
 
-    # Tombol Simpan
     if nama != "Pilih Nama":
         if (img_file is not None) or (opsi_absen == "Tidak Masuk Kantor Cuti/Sakit"):
             if st.button("✅ SIMPAN ABSENSI SEKARANG"):
                 waktu_klik = datetime.now(timezone)
                 tgl_absen = waktu_klik.strftime("%Y-%m-%d")
                 jam_absen = waktu_klik.strftime("%H:%M:%S")
-
                 denda = 0
                 status_denda = "Lunas"
                 
@@ -95,12 +83,10 @@ if menu == "Absensi Karyawan":
                 else:
                     status = opsi_absen.upper()
 
-                # Simpan ke Excel
                 data_baru = pd.DataFrame([[tgl_absen, jam_absen, nama, status, alasan, denda, status_denda]], columns=columns)
                 df_total = pd.concat([df_total, data_baru], ignore_index=True)
                 df_total.to_excel(excel_file, index=False)
 
-                # Simpan Foto
                 if img_file:
                     ext = "jpg" if not hasattr(img_file, 'name') else img_file.name.split('.')[-1]
                     nama_file = f"{tgl_absen}_{nama}_{status}.{ext}".replace(" ", "_")
@@ -116,35 +102,52 @@ elif menu == "Tebus Denda":
     nama_tebus = st.selectbox("Siapa yang ingin menebus?", Karyawan_List)
     
     if nama_tebus != "Pilih Nama":
-        hutang_user = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas')]
-        total_hutang = hutang_user['Denda'].sum()
+        # Ambil list denda yang belum lunas
+        idx_hutang = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas')].index
+        total_hutang = df_total.loc[idx_hutang, 'Denda'].sum()
         
         if total_hutang > 0:
             st.error(f"Total Akumulasi Denda Anda: Rp {total_hutang:,}")
+            
+            # Pilihan Tebus Semua atau Sebagian
+            mode_tebus = st.radio("Pilih Jumlah Tebusan:", ["Tebus Semua", "Tebus Sebagian (Cicil)"])
+            
+            jumlah_dibayar = total_hutang
+            if mode_tebus == "Tebus Sebagian (Cicil)":
+                jumlah_dibayar = st.number_input("Masukkan Nominal yang Ingin Ditebus (Kelipatan 10.000):", min_value=10000, max_value=int(total_hutang), step=10000)
+            
             metode = st.radio("Pilih Metode Penebusan:", ["Bayar Tunai / Transfer", "Membersihkan Kantor"])
             
+            # Upload Bukti sesuai metode
+            file_bukti = []
             if metode == "Bayar Tunai / Transfer":
-                bukti = st.file_uploader("Upload Bukti Bayar", type=['jpg','png','jpeg'])
-                if bukti and st.button("Konfirmasi Bayar"):
-                    tgl = datetime.now(timezone).strftime("%Y%m%d_%H%M")
-                    with open(os.path.join(folder_penebusan, f"BAYAR_{nama_tebus}_{tgl}.jpg"), "wb") as f:
-                        f.write(bukti.getbuffer())
-                    df_total.loc[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas'), 'Status Denda'] = 'Lunas (Bayar)'
-                    df_total.to_excel(excel_file, index=False)
-                    st.success("Denda Lunas!")
-                    st.rerun()
+                bt = st.file_uploader("Upload Bukti Bayar", type=['jpg','png','jpeg'])
+                if bt: file_bukti.append(bt)
             else:
-                f_seb = st.camera_input("Foto Sebelum")
-                f_ses = st.camera_input("Foto Sesudah")
-                if f_seb and f_ses and st.button("Kirim Laporan"):
-                    tgl = datetime.now(timezone).strftime("%Y%m%d_%H%M")
-                    with open(os.path.join(folder_penebusan, f"SEBELUM_{nama_tebus}_{tgl}.jpg"), "wb") as f:
-                        f.write(f_seb.getbuffer())
-                    with open(os.path.join(folder_penebusan, f"SESUDAH_{nama_tebus}_{tgl}.jpg"), "wb") as f:
-                        f.write(f_ses.getbuffer())
-                    df_total.loc[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas'), 'Status Denda'] = 'Lunas (Bersih)'
+                f_seb = st.camera_input("Foto Sebelum Bersih-bersih")
+                f_ses = st.camera_input("Foto Sesudah Bersih-bersih")
+                if f_seb and f_ses:
+                    file_bukti.extend([f_seb, f_ses])
+            
+            if st.button("Konfirmasi Penebusan"):
+                if not file_bukti:
+                    st.warning("Mohon lengkapi bukti foto/gambar!")
+                else:
+                    tgl_skrg = datetime.now(timezone).strftime("%Y%m%d_%H%M")
+                    # Simpan Bukti ke Folder
+                    for i, f in enumerate(file_bukti):
+                        with open(os.path.join(folder_penebusan, f"TEBUS_{nama_tebus}_{tgl_skrg}_{i}.jpg"), "wb") as file_simpan:
+                            file_simpan.write(f.getbuffer())
+                    
+                    # LOGIKA PELUNASAN PARSIAL
+                    jumlah_terpenuhi = 0
+                    for idx in idx_hutang:
+                        if jumlah_terpenuhi < jumlah_dibayar:
+                            df_total.at[idx, 'Status Denda'] = f"Lunas ({metode})"
+                            jumlah_terpenuhi += df_total.at[idx, 'Denda']
+                    
                     df_total.to_excel(excel_file, index=False)
-                    st.success("Denda Lunas!")
+                    st.success(f"Berhasil menebus denda sebesar Rp {jumlah_dibayar:,}!")
                     st.rerun()
         else:
             st.success("Tidak ada tunggakan denda.")
@@ -154,37 +157,27 @@ elif menu == "Login Admin":
     pw = st.text_input("Password Admin:", type="password")
     if pw == "galva123":
         tab1, tab2, tab3 = st.tabs(["📊 Data Absensi", "📸 Galeri Foto", "⚙️ Pengaturan"])
-        
         with tab1:
-            st.subheader("Rekap Excel")
             st.dataframe(df_total)
             if os.path.exists(excel_file):
                 with open(excel_file, "rb") as f:
                     st.download_button("📥 Download Excel", f, "Laporan_Absen.xlsx")
-        
         with tab2:
             st.subheader("Foto Absensi Hari Ini")
             daftar_foto = os.listdir(folder_foto)
             if daftar_foto:
-                # Menampilkan foto dalam grid
                 cols = st.columns(3)
                 for i, file_foto in enumerate(daftar_foto):
-                    with cols[i % 3]:
-                        st.image(os.path.join(folder_foto, file_foto), caption=file_foto)
-            else:
-                st.info("Belum ada foto absen.")
-                
+                    with cols[i % 3]: st.image(os.path.join(folder_foto, file_foto), caption=file_foto)
             st.divider()
             st.subheader("Foto Penebusan Denda")
             daftar_tebus = os.listdir(folder_penebusan)
             if daftar_tebus:
                 cols_t = st.columns(3)
                 for i, file_t in enumerate(daftar_tebus):
-                    with cols_t[i % 3]:
-                        st.image(os.path.join(folder_penebusan, file_t), caption=file_t)
-
+                    with cols_t[i % 3]: st.image(os.path.join(folder_penebusan, file_t), caption=file_t)
         with tab3:
-            if st.button("⚠️ RESET SEMUA DATA (HAPUS SEMUA)"):
+            if st.button("⚠️ RESET SEMUA DATA"):
                 if os.path.exists(excel_file): os.remove(excel_file)
                 shutil.rmtree(folder_foto); os.makedirs(folder_foto)
                 shutil.rmtree(folder_penebusan); os.makedirs(folder_penebusan)
