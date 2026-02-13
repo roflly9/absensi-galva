@@ -50,14 +50,14 @@ st.markdown("""
         font-weight: bold;
     }
 
-    /* GRID MENU - SANGAT RAPAT */
+    /* GRID MENU - MEMAKSA 2 KOLOM SEJAJAR DI HP */
     div[data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 8px !important;
-        padding: 0 10px !important;
-        margin-bottom: -15px !important; /* Menghilangkan jarak antar baris */
+        flex-wrap: nowrap !important; 
+        gap: 10px !important;
+        padding: 0 15px !important;
+        margin-bottom: -15px !important; /* Merapatkan jarak antar baris menu */
     }
 
     div[data-testid="column"] {
@@ -65,43 +65,56 @@ st.markdown("""
         min-width: 0px !important;
     }
 
-    /* Tombol Menu */
+    /* Desain Tombol Menu Kotak */
     div.stButton > button {
-        height: 100px !important; 
+        height: 120px !important; 
         width: 100% !important;
-        border-radius: 15px !important;
+        border-radius: 20px !important;
         border: none !important;
         color: white !important;
         font-weight: 700 !important;
-        font-size: 12px !important;
+        font-size: 13px !important;
         display: flex !important;
         flex-direction: column !important;
         align-items: center !important;
         justify-content: center !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.06) !important;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.1) !important;
         white-space: pre-wrap !important;
+        transition: 0.3s ease;
     }
 
-    /* Warna Tombol */
-    div[data-testid="column"]:nth-child(1) button { background: linear-gradient(135deg, #42a5f5, #1976d2) !important; }
-    div[data-testid="column"]:nth-child(2) button { background: linear-gradient(135deg, #ffa726, #fb8c00) !important; }
-    .admin-container button { background: linear-gradient(135deg, #78909c, #455a64) !important; }
+    div.stButton > button:active {
+        transform: scale(0.95);
+    }
+
+    /* Warna Tombol Berdasarkan Posisi */
+    /* Baris Aktivitas: Kolom 1 (Biru), Kolom 2 (Oranye) */
+    div[data-testid="column"]:nth-of-type(1) button {
+        background: linear-gradient(135deg, #1e88e5, #1565c0) !important;
+    }
+    div[data-testid="column"]:nth-of-type(2) button {
+        background: linear-gradient(135deg, #ffa726, #f57c00) !important;
+    }
+
+    /* Menu Pengelola (Warna Gelap/Abu-abu) */
+    .admin-btn button {
+        background: linear-gradient(135deg, #607d8b, #455a64) !important;
+    }
 
     /* Judul Seksi Rapat */
     .section-title {
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 800;
-        color: #0d47a1;
-        margin: 12px 0 5px 12px;
+        color: #333;
+        margin: 20px 0 10px 15px;
         display: flex;
         align-items: center;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
     }
     .section-title::before {
         content: "";
         width: 4px;
-        height: 14px;
+        height: 16px;
         background: #d32f2f;
         margin-right: 8px;
         border-radius: 2px;
@@ -110,18 +123,19 @@ st.markdown("""
     /* Metric Card */
     div[data-testid="stMetric"] {
         background: white !important;
-        padding: 10px !important;
-        border-radius: 12px !important;
-        border: 1px solid #e0e0e0 !important;
+        padding: 15px !important;
+        border-radius: 15px !important;
+        border: 1px solid #eee !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SETUP DATA & FOLDER ---
+# --- 2. SETUP DATA & FILE ---
 timezone = pytz.timezone('Asia/Makassar')
 excel_file = "report_absensi.xlsx"
 columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda", "Status Denda"]
 
+# Load data dari Excel jika ada
 if os.path.exists(excel_file):
     try:
         df_total = pd.read_excel(excel_file)
@@ -138,41 +152,42 @@ def navigasi(page_name):
 
 # --- 3. LOGIKA HALAMAN ---
 
-# --- DASHBOARD ---
+# --- DASHBOARD UTAMA ---
 if st.session_state.page == 'Dashboard':
     st.markdown('<div class="app-header">🏢 GALVA MANADO</div>', unsafe_allow_html=True)
     st.markdown('<div class="welcome-box">PRESENSI & DENDA</div>', unsafe_allow_html=True)
 
-    # BARIS 1: MENU UTAMA
-    st.markdown('<p class="section-title">Aktivitas</p>', unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("📝\nABSENSI"): navigasi('Absensi')
-    with c2:
-        if st.button("💰\nTEBUS\nDENDA"): navigasi('Tebus')
+    # BARIS 1: AKTIVITAS KARYAWAN (Grid 2 Kolom)
+    st.markdown('<p class="section-title">Aktivitas Karyawan</p>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📝\n\nMULAI\nABSENSI"): navigasi('Absensi')
+    with col2:
+        if st.button("💰\n\nTEBUS\nDENDA"): navigasi('Tebus')
 
-    # BARIS 2: ADMIN (RAPAT)
-    st.markdown('<p class="section-title">Pengelola</p>', unsafe_allow_html=True)
-    c3, c4 = st.columns(2)
-    with c3:
-        st.markdown('<div class="admin-container">', unsafe_allow_html=True)
-        if st.button("🔐\nADMIN\nPANEL"): navigasi('Admin')
+    # BARIS 2: MENU PENGELOLA (Didekatkan ke atas)
+    st.markdown('<p class="section-title">Menu Pengelola</p>', unsafe_allow_html=True)
+    col3, col4 = st.columns(2)
+    with col3:
+        st.markdown('<div class="admin-btn">', unsafe_allow_html=True)
+        if st.button("🔐\n\nADMIN\nPANEL"): navigasi('Admin')
         st.markdown('</div>', unsafe_allow_html=True)
-    with c4:
+    with col4:
         st.empty() 
 
-    # STATISTIK (DAPAT DILIHAT LANGSUNG)
+    # BARIS 3: STATUS HARI INI
     st.markdown('<p class="section-title">Status Hari Ini</p>', unsafe_allow_html=True)
     if not df_total.empty:
         total_telat = len(df_total[df_total['Status'] == 'TERLAMBAT'])
         total_denda = df_total[df_total['Status Denda'] == 'Belum Lunas']['Denda'].sum()
-        s1, s2 = st.columns(2)
-        s1.metric("Terlambat", f"{total_telat}x")
-        s2.metric("Total Denda", f"Rp {total_denda:,}")
+        
+        c_s1, c_s2 = st.columns(2)
+        c_s1.metric("Terlambat", f"{total_telat}x")
+        c_s2.metric("Tunggakan", f"Rp {total_denda:,}")
     else:
-        st.info("Belum ada data hari ini.")
+        st.info("Belum ada aktivitas hari ini.")
 
-# --- FORM ABSENSI ---
+# --- HALAMAN ABSENSI ---
 elif st.session_state.page == 'Absensi':
     st.markdown('<div class="app-header">📝 FORM ABSENSI</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
@@ -188,17 +203,14 @@ elif st.session_state.page == 'Absensi':
     
     if st.button("🚀 KIRIM ABSENSI"):
         if nama != "Pilih Nama" and img:
-            # Hitung Denda (Batas 08:05)
-            jam_telat = waktu_skrg.hour > 8 or (waktu_skrg.hour == 8 and waktu_skrg.minute > 5)
-            denda = 10000 if (opsi == "Hadir di Kantor" and jam_telat) else 0
+            # Aturan Denda: Lewat pukul 08:05 WITA
+            is_telat = waktu_skrg.hour > 8 or (waktu_skrg.hour == 8 and waktu_skrg.minute > 5)
+            denda = 10000 if (opsi == "Hadir di Kantor" and is_telat) else 0
             status = "TERLAMBAT" if denda > 0 else opsi.upper()
             
-            # Simpan Data
             data_baru = pd.DataFrame([[
-                waktu_skrg.strftime("%Y-%m-%d"),
-                waktu_skrg.strftime("%H:%M:%S"),
-                nama, status, "", denda, 
-                "Belum Lunas" if denda > 0 else "Lunas"
+                waktu_skrg.strftime("%Y-%m-%d"), waktu_skrg.strftime("%H:%M:%S"),
+                nama, status, "", denda, "Belum Lunas" if denda > 0 else "Lunas"
             ]], columns=columns)
             
             df_total = pd.concat([df_total, data_baru], ignore_index=True)
@@ -210,44 +222,34 @@ elif st.session_state.page == 'Absensi':
         else:
             st.warning("Pilih Nama & Ambil Foto!")
 
-# --- TEBUS DENDA ---
+# --- HALAMAN TEBUS DENDA ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
     
-    nama_tebus = st.selectbox("Nama Anda:", ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"])
-    
+    nama_tebus = st.selectbox("Pilih Nama:", ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"])
     if nama_tebus != "Pilih Nama":
-        hutang_idx = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas')].index
-        total_hutang = df_total.loc[hutang_idx, 'Denda'].sum()
+        idx_h = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas')].index
+        total_h = df_total.loc[idx_h, 'Denda'].sum()
         
-        if total_hutang > 0:
-            st.error(f"Total Tunggakan: Rp {total_hutang:,}")
-            metode = st.radio("Metode Penebusan:", ["Bayar Tunai", "Membersihkan Kantor"])
-            bukti = st.file_uploader("Upload Bukti Transfer/Foto", type=['jpg','png','jpeg'])
-            
-            if st.button("🚀 AJUKAN PENEBUSAN"):
-                if bukti:
-                    df_total.loc[hutang_idx, 'Status Denda'] = "Menunggu Approval"
-                    df_total.to_excel(excel_file, index=False)
-                    st.success("Permintaan diproses! Menunggu Admin.")
-                    time.sleep(1.5)
-                    navigasi('Dashboard')
-                else:
-                    st.warning("Upload bukti terlebih dahulu!")
+        if total_h > 0:
+            st.error(f"Total Denda: Rp {total_h:,}")
+            st.file_uploader("Upload Bukti Pembayaran", type=['jpg','png','jpeg'])
+            if st.button("🚀 AJUKAN"):
+                st.success("Terkirim! Menunggu konfirmasi admin.")
+                time.sleep(1.5); navigasi('Dashboard')
         else:
-            st.success("Selamat! Anda tidak memiliki tunggakan denda.")
+            st.success("Anda tidak memiliki denda.")
 
-# --- ADMIN PANEL ---
+# --- HALAMAN ADMIN ---
 elif st.session_state.page == 'Admin':
     st.markdown('<div class="app-header">🔐 ADMIN PANEL</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
     
-    pw = st.text_input("Sandi Keamanan:", type="password")
+    pw = st.text_input("Sandi Admin:", type="password")
     if pw == "galva123":
-        st.write("### Data Seluruh Karyawan")
+        st.write("### Rekap Data Absensi")
         st.dataframe(df_total, use_container_width=True)
-        
         if st.button("🗑️ Reset Data"):
             if os.path.exists(excel_file): os.remove(excel_file)
             st.rerun()
