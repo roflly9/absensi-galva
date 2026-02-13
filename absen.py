@@ -4,37 +4,46 @@ import os
 import pandas as pd
 import pytz 
 import zipfile 
-import shutil  
+import shutil
 
 # Tentukan zona waktu Manado (WITA)
 timezone = pytz.timezone('Asia/Makassar')
 
+st.set_page_config(page_title="Absensi Galva Manado", layout="centered")
 st.title("Sistem Absensi Galva Manado")
 
 # Konfigurasi Folder & File
 excel_file = "report_absensi.xlsx"
 folder_foto = "hasil_absen"
+folder_penebusan = "bukti_penebusan"
 
-if not os.path.exists(folder_foto):
-    os.makedirs(folder_foto)
+# Pastikan folder tersedia
+for folder in [folder_foto, folder_penebusan]:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
 
-# Inisialisasi DataFrame (Menambahkan Kolom Denda)
-columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda"]
+# Inisialisasi DataFrame
+columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda", "Status Denda"]
+
 if os.path.exists(excel_file):
-    df_total = pd.read_excel(excel_file)
-    # Cek jika kolom denda belum ada (untuk file lama)
-    if "Denda" not in df_total.columns:
-        df_total["Denda"] = 0
+    try:
+        df_total = pd.read_excel(excel_file)
+        for col in columns:
+            if col not in df_total.columns:
+                df_total[col] = "Lunas" if col == "Status Denda" else 0
+    except:
+        df_total = pd.DataFrame(columns=columns)
 else:
     df_total = pd.DataFrame(columns=columns)
 
 # Menu Navigasi
-menu = st.sidebar.selectbox("Menu", ["Absensi Karyawan", "Login Admin"])
+menu = st.sidebar.selectbox("Menu", ["Absensi Karyawan", "Tebus Denda", "Login Admin"])
+
+Karyawan_List = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"]
 
 # --- HALAMAN ABSENSI ---
 if menu == "Absensi Karyawan":
-    Karyawan = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"]
-    nama = st.selectbox("Pilih Nama Anda:", Karyawan)
+    nama = st.selectbox("Pilih Nama Anda:", Karyawan_List)
     opsi_absen = st.radio("Tipe Kehadiran:", ["Hadir di Kantor", "Izin Terlambat", "Izin Tidak Masuk / Cuti"])
 
     alasan = st.text_area("Masukkan Alasan / Catatan:") if opsi_absen != "Hadir di Kantor" else ""
@@ -45,105 +54,99 @@ if menu == "Absensi Karyawan":
     else:
         img_file = st.file_uploader("Upload Bukti", type=['jpg', 'jpeg', 'png', 'pdf'])
 
-    # Logika Tombol Submit
-    if opsi_absen == "Hadir di Kantor":
-        submit = img_file is not None
-    else:
-        submit = st.button("Simpan Data")
-
-    if submit and nama != "Pilih Nama":
-        waktu_klik = datetime.now(timezone) 
-        jam_absen = waktu_klik.strftime("%H:%M:%S")
-        tgl_absen = waktu_klik.strftime("%Y-%m-%d")
-
-        # Logika Status & Denda
-        denda = 0
+    if (img_file is not None or opsi_absen != "Hadir di Kantor") and nama != "Pilih Nama":
+        simpan = False
         if opsi_absen == "Hadir di Kantor":
-            # Terlambat jika lewat dari 08:05
-            if (waktu_klik.hour > 8 or (waktu_klik.hour == 8 and waktu_klik.minute > 5)):
-                status = "TERLAMBAT"
-                denda = 10000
-            else:
-                status = "TEPAT WAKTU"
+            simpan = True
         else:
-            status = opsi_absen.upper()
+            if st.button("Simpan Data Absensi"):
+                simpan = True
 
-        # Simpan Data ke DataFrame
-        data_baru = pd.DataFrame([[tgl_absen, jam_absen, nama, status, alasan, denda]], columns=columns)
-        df_total = pd.concat([df_total, data_baru], ignore_index=True)
-        df_total.to_excel(excel_file, index=False)
+        if simpan:
+            waktu_klik = datetime.now(timezone) 
+            jam_absen = waktu_klik.strftime("%H:%M:%S")
+            tgl_absen = waktu_klik.strftime("%Y-%m-%d")
 
-        # Simpan File Foto
-        ext = "jpg" if opsi_absen == "Hadir di Kantor" else img_file.name.split('.')[-1]
-        nama_file_foto = f"{tgl_absen}_{nama}_{status}.{ext}".replace(" ", "_")
-        path_foto = os.path.join(folder_foto, nama_file_foto)
+            denda = 0
+            status_denda = "Lunas"
+            
+            if opsi_absen == "Hadir di Kantor":
+                if (waktu_klik.hour > 8 or (waktu_klik.hour == 8 and waktu_klik.minute > 5)):
+                    status = "TERLAMBAT"
+                    denda = 10000
+                    status_denda = "Belum Lunas"
+                else:
+                    status = "TEPAT WAKTU"
+            else:
+                status = opsi_absen.upper()
+
+            data_baru = pd.DataFrame([[tgl_absen, jam_absen, nama, status, alasan, denda, status_denda]], columns=columns)
+            df_total = pd.concat([df_total, data_baru], ignore_index=True)
+            df_total.to_excel(excel_file, index=False)
+
+            # Simpan File
+            ext = "jpg" if opsi_absen == "Hadir di Kantor" else img_file.name.split('.')[-1]
+            nama_file = f"{tgl_absen}_{nama}_{status}.{ext}".replace(" ", "_")
+            with open(os.path.join(folder_foto, nama_file), "wb") as f:
+                f.write(img_file.getbuffer())
+
+            st.success(f"Absen {nama} tercatat!")
+            if denda > 0:
+                st.warning(f"⚠️ Terlambat! Denda Rp 10.000 tercatat.")
+            st.rerun()
+
+# --- HALAMAN TEBUS DENDA ---
+elif menu == "Tebus Denda":
+    st.subheader("Penebusan Denda Keterlambatan")
+    nama_tebus = st.selectbox("Siapa yang ingin menebus?", Karyawan_List)
+    
+    if nama_tebus != "Pilih Nama":
+        hutang_user = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas')]
+        total_hutang = hutang_user['Denda'].sum()
         
-        with open(path_foto, "wb") as f:
-            f.write(img_file.getbuffer())
-
-        # Notifikasi Sukses & Info Denda
-        st.success(f"Berhasil! Absen {nama} telah tercatat.")
-        if denda > 0:
-            st.warning(f"⚠️ Anda Terlambat! Denda: Rp {denda:,}")
-        
-        st.table(data_baru)
+        if total_hutang > 0:
+            st.error(f"Total Akumulasi Denda Anda: Rp {total_hutang:,}")
+            metode = st.radio("Pilih Metode Penebusan:", ["Bayar Tunai / Transfer", "Membersihkan Kantor"])
+            
+            if metode == "Bayar Tunai / Transfer":
+                bukti = st.file_uploader("Upload Bukti Bayar", type=['jpg','png','jpeg'])
+                if bukti and st.button("Konfirmasi Bayar"):
+                    tgl = datetime.now(timezone).strftime("%Y%m%d_%H%M")
+                    with open(os.path.join(folder_penebusan, f"BAYAR_{nama_tebus}_{tgl}.jpg"), "wb") as f:
+                        f.write(bukti.getbuffer())
+                    df_total.loc[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas'), 'Status Denda'] = 'Lunas (Bayar)'
+                    df_total.to_excel(excel_file, index=False)
+                    st.success("Denda Lunas!")
+                    st.rerun()
+            else:
+                f_seb = st.camera_input("Foto Sebelum")
+                f_ses = st.camera_input("Foto Sesudah")
+                if f_seb and f_ses and st.button("Kirim Laporan"):
+                    tgl = datetime.now(timezone).strftime("%Y%m%d_%H%M")
+                    with open(os.path.join(folder_penebusan, f"SEBELUM_{nama_tebus}_{tgl}.jpg"), "wb") as f:
+                        f.write(f_seb.getbuffer())
+                    with open(os.path.join(folder_penebusan, f"SESUDAH_{nama_tebus}_{tgl}.jpg"), "wb") as f:
+                        f.write(f_ses.getbuffer())
+                    df_total.loc[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas'), 'Status Denda'] = 'Lunas (Bersih)'
+                    df_total.to_excel(excel_file, index=False)
+                    st.success("Denda Lunas!")
+                    st.rerun()
+        else:
+            st.success("Tidak ada tunggakan denda.")
 
 # --- HALAMAN ADMIN ---
 elif menu == "Login Admin":
-    st.subheader("Halaman Khusus Admin")
-    password = st.text_input("Masukkan Password Admin:", type="password")
-    
-    if password == "galva123":
-        st.success("Login Berhasil!")
-        
-        # --- FITUR RESET ---
-        st.warning("⚠️ Area Berbahaya")
-        if st.button("RESET SEMUA DATA (Hapus Excel & Foto)"):
-            if os.path.exists(excel_file):
-                os.remove(excel_file)
-            if os.path.exists(folder_foto):
-                shutil.rmtree(folder_foto)
-                os.makedirs(folder_foto)
-            st.error("Semua data telah direset! Halaman akan dimuat ulang...")
-            st.rerun()
-        
-        st.markdown("---")
-        tab1, tab2 = st.tabs(["📊 Rekap Absensi", "🖼️ Rekap Foto/File"])
-        
+    pw = st.text_input("Password Admin:", type="password")
+    if pw == "galva123":
+        tab1, tab2 = st.tabs(["📊 Laporan", "⚙️ Pengaturan"])
         with tab1:
+            st.dataframe(df_total)
             if os.path.exists(excel_file):
-                df_admin = pd.read_excel(excel_file)
-                # Menampilkan total denda di dashboard admin
-                total_denda_kumpul = df_admin["Denda"].sum()
-                st.metric("Total Denda Terkumpul", f"Rp {total_denda_kumpul:,}")
-                
-                st.dataframe(df_admin)
                 with open(excel_file, "rb") as f:
-                    st.download_button("📥 Download Excel Keseluruhan", f, f"Rekap_Total_{datetime.now(timezone).strftime('%d%m%Y')}.xlsx")
-            else:
-                st.info("Belum ada data tabel.")
-
+                    st.download_button("Download Excel", f, "Laporan_Absen.xlsx")
         with tab2:
-            files = [f for f in os.listdir(folder_foto) if f.endswith(('.jpg', '.jpeg', '.png', '.pdf'))]
-            if files:
-                st.write(f"Terdapat {len(files)} file lampiran.")
-                zip_path = "rekap_foto.zip"
-                with zipfile.ZipFile(zip_path, 'w') as zipf:
-                    for file in files:
-                        zipf.write(os.path.join(folder_foto, file), file)
-                
-                with open(zip_path, "rb") as f:
-                    st.download_button(label="📦 DOWNLOAD SEMUA FOTO (ZIP)", data=f, 
-                                       file_name=f"Rekap_Foto_{datetime.now(timezone).strftime('%d%m%Y')}.zip",
-                                       mime="application/zip")
-                
-                st.markdown("---")
-                selected_file = st.selectbox("Lihat detail file:", files)
-                path_sel = os.path.join(folder_foto, selected_file)
-                if selected_file.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    st.image(path_sel, use_container_width=True)
-            else:
-                st.info("Belum ada lampiran foto.")
-                
-    elif password != "":
-        st.error("Password Salah!")
+            if st.button("RESET SEMUA DATA"):
+                if os.path.exists(excel_file): os.remove(excel_file)
+                shutil.rmtree(folder_foto); os.makedirs(folder_foto)
+                shutil.rmtree(folder_penebusan); os.makedirs(folder_penebusan)
+                st.rerun()
