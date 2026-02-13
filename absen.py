@@ -40,7 +40,6 @@ st.markdown("""
         justify-content: center !important; box-shadow: 0 4px 10px rgba(0,0,0,0.08) !important;
         margin-bottom: 8px !important; background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%) !important;
     }
-    /* Kotak Password Admin dengan Border Hitam */
     .stTextInput > div > div > input {
         border: 2px solid #000000 !important;
         border-radius: 10px;
@@ -71,11 +70,12 @@ karyawan_list = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "R
 def muat_data():
     if os.path.exists(excel_file):
         try:
-            df = pd.read_excel(excel_file)
-            # Pastikan kolom esensial tersedia untuk cegah KeyError
+            # Menggunakan engine openpyxl secara eksplisit
+            df = pd.read_excel(excel_file, engine='openpyxl')
             for col in columns:
                 if col not in df.columns:
                     df[col] = None
+            # Memastikan Tanggal terformat dengan benar
             df['Tanggal'] = pd.to_datetime(df['Tanggal']).dt.date
             return df
         except:
@@ -93,7 +93,6 @@ def navigasi(nama_hal):
 
 # --- 3. LOGIKA HALAMAN ---
 
-# --- DASHBOARD ---
 if st.session_state.page == 'Dashboard':
     st.markdown('<div class="app-header">🏢 GALVA MANADO</div>', unsafe_allow_html=True)
     st.markdown('<div class="welcome-box">PRESENSI & DENDA</div>', unsafe_allow_html=True)
@@ -107,7 +106,6 @@ if st.session_state.page == 'Dashboard':
 
     st.markdown('<p class="section-title">Status & Ringkasan</p>', unsafe_allow_html=True)
     if not df_total.empty:
-        # Konversi Denda ke numerik agar tidak error saat dijumlahkan
         df_total['Denda'] = pd.to_numeric(df_total['Denda'], errors='coerce').fillna(0)
         total_setoran = df_total[df_total['Status Denda'] == 'Lunas']['Denda'].sum()
         st.metric("Total Dana Pembayaran Denda", f"Rp {int(total_setoran):,}")
@@ -123,7 +121,6 @@ if st.session_state.page == 'Dashboard':
     else:
         st.info("Belum ada data aktivitas.")
 
-# --- FORM ABSENSI ---
 elif st.session_state.page == 'Absensi':
     st.markdown('<div class="app-header">📝 FORM ABSENSI</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Menu"): navigasi('Dashboard')
@@ -157,10 +154,9 @@ elif st.session_state.page == 'Absensi':
         else:
             baru = pd.DataFrame([[waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"), nama, st_text, alasan, denda_final, "Belum Lunas" if denda_final > 0 else "Lunas", img_data, None]], columns=columns)
             df_total = pd.concat([df_total, baru], ignore_index=True)
-            df_total.to_excel(excel_file, index=False)
-            st.balloons(); st.success("✅ Terkirim!"); time.sleep(2); navigasi('Dashboard')
+            df_total.to_excel(excel_file, index=False, engine='openpyxl')
+            st.balloons(); st.success("✅ Terkirim!"); time.sleep(1); navigasi('Dashboard')
 
-# --- MENU TEBUS ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 MENU TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Dashboard"): navigasi('Dashboard')
@@ -196,11 +192,10 @@ elif st.session_state.page == 'Tebus':
                             df_total.at[idx, 'Bukti_Bayar'] = bukti_list[0] if len(bukti_list) == 1 else bukti_list
                             df_total.at[idx, 'Alasan'] = f"Metode: {metode} (Penebusan Rp {nominal_tebus:,})"
                             terbayar += df_total.at[idx, 'Denda']
-                    df_total.to_excel(excel_file, index=False)
-                    st.success("Berhasil!"); time.sleep(2); navigasi('Dashboard')
+                    df_total.to_excel(excel_file, index=False, engine='openpyxl')
+                    st.success("Berhasil!"); time.sleep(1); navigasi('Dashboard')
         else: st.success("Tidak ada tunggakan.")
 
-# --- ADMIN PANEL ---
 elif st.session_state.page == 'Admin':
     st.markdown('<div class="app-header">🔐 ADMIN PANEL</div>', unsafe_allow_html=True)
     if st.button("⬅️ Dashboard"): 
@@ -223,9 +218,8 @@ elif st.session_state.page == 'Admin':
             if not pending.empty:
                 for idx, row in pending.iterrows():
                     with st.expander(f"Verifikasi: {row['Nama']} | {row['Alasan']}"):
-                        # PENGAMAN MEDIA STORAGE
                         bukti = row.get('Bukti_Bayar')
-                        if bukti and not pd.isna(bukti):
+                        if bukti is not None and str(bukti) != 'nan':
                             try:
                                 if isinstance(bukti, list):
                                     c1, c2 = st.columns(2)
@@ -233,41 +227,47 @@ elif st.session_state.page == 'Admin':
                                     c2.image(bukti[1], caption="After", use_container_width=True)
                                 else:
                                     st.image(bukti, caption="Bukti", width=400)
-                            except: st.warning("Media rusak pada ID ini.")
+                            except: st.warning("Media rusak.")
                         
                         col_a, col_b = st.columns(2)
                         if col_a.button(f"Sahkan (ID:{idx})", key=f"y_{idx}"):
-                            df_total.at[idx, 'Status Denda'] = 'Lunas'; df_total.to_excel(excel_file, index=False); st.rerun()
+                            df_total.at[idx, 'Status Denda'] = 'Lunas'; df_total.to_excel(excel_file, index=False, engine='openpyxl'); st.rerun()
                         if col_b.button(f"Tolak (ID:{idx})", key=f"n_{idx}"):
-                            df_total.at[idx, 'Status Denda'] = 'Belum Lunas'; df_total.to_excel(excel_file, index=False); st.rerun()
+                            df_total.at[idx, 'Status Denda'] = 'Belum Lunas'; df_total.to_excel(excel_file, index=False, engine='openpyxl'); st.rerun()
             else: st.info("Tidak ada permintaan verifikasi.")
 
-        with t1: # TREN
+        with t1:
             if HAS_PLOTLY and not df_total.empty:
                 telat_df = df_total[df_total['Status'] == 'TERLAMBAT']
                 if not telat_df.empty:
                     grafik = px.bar(telat_df.groupby('Tanggal').size().reset_index(name='Jumlah'), x='Tanggal', y='Jumlah', title="Trend Keterlambatan")
                     st.plotly_chart(grafik, use_container_width=True)
         
-        with t2: # DATA
-            # PENGAMAN KEYERROR (drop kolom gambar dengan aman)
+        with t2:
             df_view = df_total.drop(columns=['Foto_Absen', 'Bukti_Bayar'], errors='ignore')
             st.dataframe(df_view)
             st.download_button("📥 Download Excel", data=open(excel_file, "rb") if os.path.exists(excel_file) else b"", file_name="rekap_galva.xlsx")
         
-        with t4: # FOTO
+        with t4: # FOTO ABSENSI (BAGIAN YANG DIPERBAIKI)
             if not df_total.empty:
-                for i in range(0, len(df_total), 4):
-                    cols = st.columns(4)
-                    for j, (idx, item) in enumerate(df_total.iloc[i:i+4].iterrows()):
-                        # PENGAMAN MEDIA STORAGE (GALERI)
-                        foto = item.get('Foto_Absen')
-                        if foto and not pd.isna(foto):
+                # Memfilter hanya data yang memiliki foto
+                df_foto = df_total[df_total['Foto_Absen'].notna()]
+                if not df_foto.empty:
+                    # Tampilkan foto terbaru di atas
+                    df_foto = df_foto.iloc[::-1] 
+                    for i in range(0, len(df_foto), 4):
+                        cols = st.columns(4)
+                        for j, (idx, item) in enumerate(df_foto.iloc[i:i+4].iterrows()):
+                            foto = item['Foto_Absen']
                             try:
                                 with cols[j]:
-                                    st.image(foto, caption=f"{item['Nama']} ({item['Tanggal']})", use_container_width=True)
-                            except: pass
-        with t5: # RESET
+                                    st.image(foto, caption=f"{item['Nama']}\n{item['Tanggal']}", use_container_width=True)
+                            except:
+                                continue
+                else:
+                    st.warning("Belum ada foto absensi yang tersimpan.")
+        
+        with t5:
             if st.button("🔥 RESET SEMUA DATA"):
                 if os.path.exists(excel_file): os.remove(excel_file)
                 st.rerun()
