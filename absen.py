@@ -6,14 +6,59 @@ import pytz
 import shutil
 import time
 import io
+from PIL import Image
 
-# Tentukan zona waktu Manado (WITA)
+# --- KONFIGURASI HALAMAN ---
+st.set_page_config(
+    page_title="Absensi Galva Manado", 
+    page_icon="🏢", 
+    layout="centered" # Menggunakan centered agar lebih pas di layar HP
+)
+
+# --- CUSTOM CSS UNTUK TAMPILAN MOBILE ---
+st.markdown("""
+    <style>
+    /* Sembunyikan Header dan Footer bawaan Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Atur padding utama */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+
+    /* Mempercantik Tombol (Mobile Friendly) */
+    div.stButton > button:first-child {
+        width: 100%;
+        height: 50px;
+        border-radius: 10px;
+        font-weight: bold;
+        background-color: #0046ad;
+        color: white;
+        border: none;
+    }
+
+    /* Styling input agar lebih rapi */
+    .stTextInput, .stSelectbox, .stTextArea {
+        margin-bottom: 10px;
+    }
+    
+    /* Banner Selamat Datang */
+    .welcome-banner {
+        background-color: #f0f2f6;
+        padding: 20px;
+        border-radius: 15px;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- KONFIGURASI WAKTU & FOLDER ---
 timezone = pytz.timezone('Asia/Makassar')
 
-st.set_page_config(page_title="Absensi Galva Manado", layout="wide")
-st.title("Sistem Absensi Galva Manado")
-
-# --- KONFIGURASI FOLDER & FILE ---
 excel_file = "report_absensi.xlsx"
 folder_foto = "hasil_absen"
 folder_penebusan = "bukti_penebusan"
@@ -31,6 +76,7 @@ columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda", "Status Denda"
 if os.path.exists(excel_file):
     try:
         df_total = pd.read_excel(excel_file)
+        # Pastikan kolom tanggal terbaca sebagai string untuk filter
         df_total['Tanggal'] = pd.to_datetime(df_total['Tanggal']).dt.strftime('%Y-%m-%d')
         if "ID_Tebus" not in df_total.columns:
             df_total["ID_Tebus"] = ""
@@ -39,63 +85,73 @@ if os.path.exists(excel_file):
 else:
     df_total = pd.DataFrame(columns=columns)
 
-# --- MENU NAVIGASI ---
-menu = st.sidebar.selectbox("Menu", ["Absensi Karyawan", "Tebus Denda", "Login Admin"])
+# --- SIDEBAR NAVIGASI ---
+with st.sidebar:
+    st.title("📌 Menu Navigasi")
+    menu = st.radio("Pilih Halaman:", ["Absensi Karyawan", "Tebus Denda", "Login Admin"])
+    st.divider()
+    st.caption("v1.2 - Galva Manado App")
+
 Karyawan_List = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"]
 
-# --- HALAMAN ABSENSI ---
+# --- HALAMAN 1: ABSENSI ---
 if menu == "Absensi Karyawan":
+    st.markdown('<div class="welcome-banner"><h2>🏢 Absensi Galva</h2><p>Pastikan GPS Aktif & Foto Jelas</p></div>', unsafe_allow_html=True)
+    
     nama = st.selectbox("Pilih Nama Anda:", Karyawan_List)
-    opsi_absen = st.radio("Tipe Kehadiran:", ["Hadir di Kantor", "Izin Terlambat", "Tidak Masuk Kantor Cuti/Sakit", "Tugas Luar Kota", "Langsung ke Customer"])
+    opsi_absen = st.radio("Tipe Kehadiran:", ["Hadir di Kantor", "Izin Terlambat", "Cuti/Sakit", "Tugas Luar Kota", "Langsung ke Customer"])
 
     waktu_sekarang = datetime.now(timezone)
     jam_skrg = waktu_sekarang.strftime("%H:%M:%S")
     
     if nama != "Pilih Nama":
-        st.info(f"Jam Sekarang: **{jam_skrg}**")
+        st.info(f"🕒 Jam Sekarang: **{jam_skrg}**")
+        
+        # Logika Denda Terlambat (Batas 08:05)
+        is_late = (waktu_sekarang.hour > 8 or (waktu_sekarang.hour == 8 and waktu_sekarang.minute > 5))
+        
         if opsi_absen == "Hadir di Kantor":
-            if (waktu_sekarang.hour > 8 or (waktu_sekarang.hour == 8 and waktu_sekarang.minute > 5)):
-                st.warning("⚠️ Status Anda: **TERLAMBAT** (Denda Rp 10.000)")
+            if is_late:
+                st.warning("⚠️ Status: **TERLAMBAT** (Denda Rp 10.000)")
             else:
-                st.success("✅ Status Anda: **TEPAT WAKTU**")
+                st.success("✅ Status: **TEPAT WAKTU**")
 
-    alasan = ""
-    if opsi_absen in ["Tugas Luar Kota", "Langsung ke Customer"]:
-        alasan = st.text_input("📍 Masukkan Lokasi/Tujuan:")
-    elif opsi_absen != "Hadir di Kantor":
-        alasan = st.text_area("📝 Masukkan Alasan / Catatan:")
-    
-    img_file = st.camera_input("Ambil foto absen") if opsi_absen in ["Hadir di Kantor", "Tugas Luar Kota", "Langsung ke Customer"] else st.file_uploader("Upload Bukti", type=['jpg','png','jpeg'])
+        alasan = ""
+        if opsi_absen in ["Tugas Luar Kota", "Langsung ke Customer"]:
+            alasan = st.text_input("📍 Masukkan Lokasi/Tujuan:")
+        elif opsi_absen != "Hadir di Kantor":
+            alasan = st.text_area("📝 Masukkan Alasan / Catatan:")
+        
+        # Kamera input untuk HP
+        img_file = st.camera_input("Ambil Foto Absen") if opsi_absen in ["Hadir di Kantor", "Tugas Luar Kota", "Langsung ke Customer"] else st.file_uploader("Upload Bukti", type=['jpg','png','jpeg'])
 
-    if nama != "Pilih Nama":
-        ready_to_save = (opsi_absen in ["Hadir di Kantor", "Tugas Luar Kota", "Langsung ke Customer"] and img_file is not None) or \
-                        (opsi_absen in ["Izin Terlambat", "Tidak Masuk Kantor Cuti/Sakit"])
-
-        if ready_to_save:
+        if img_file:
             if st.button("🚀 KIRIM ABSENSI SEKARANG"):
-                with st.spinner('Menyimpan...'):
+                with st.spinner('Memproses Data...'):
                     waktu_klik = datetime.now(timezone)
-                    denda = 10000 if (opsi_absen == "Hadir di Kantor" and (waktu_klik.hour > 8 or (waktu_klik.hour == 8 and waktu_klik.minute > 5))) else 0
+                    denda = 10000 if (opsi_absen == "Hadir di Kantor" and is_late) else 0
                     status_denda = "Belum Lunas" if denda > 0 else "Lunas"
                     status = "TERLAMBAT" if denda > 0 else opsi_absen.upper()
 
+                    # Simpan ke Excel
                     data_baru = pd.DataFrame([[waktu_klik.strftime("%Y-%m-%d"), waktu_klik.strftime("%H:%M:%S"), nama, status, alasan, denda, status_denda, ""]], columns=columns)
                     df_total = pd.concat([df_total, data_baru], ignore_index=True)
                     df_total.to_excel(excel_file, index=False)
 
-                    if img_file:
-                        fname = f"{waktu_klik.strftime('%Y%m%d_%H%M%S')}_{nama}.jpg"
-                        with open(os.path.join(folder_foto, fname), "wb") as f:
-                            f.write(img_file.getbuffer())
+                    # Simpan Foto
+                    fname = f"{waktu_klik.strftime('%Y%m%d_%H%M%S')}_{nama}.jpg"
+                    with open(os.path.join(folder_foto, fname), "wb") as f:
+                        f.write(img_file.getbuffer())
                     
-                    st.success(f"✅ Absensi Berhasil dikirim pada {waktu_klik.strftime('%H:%M:%S')}!")
-                    time.sleep(3)
+                    st.success("✅ Berhasil! Mengalihkan...")
+                    time.sleep(2)
                     st.rerun()
 
-# --- HALAMAN TEBUS DENDA ---
+# --- HALAMAN 2: TEBUS DENDA ---
 elif menu == "Tebus Denda":
-    st.subheader("Penebusan Denda")
+    st.subheader("💰 Penebusan Denda")
     nama_tebus = st.selectbox("Pilih Nama:", Karyawan_List)
+    
     if nama_tebus != "Pilih Nama":
         idx_hutang = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas')].index
         total_hutang = df_total.loc[idx_hutang, 'Denda'].sum()
@@ -103,133 +159,77 @@ elif menu == "Tebus Denda":
         menunggu_app = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'].str.contains("Menunggu", na=False))]
         
         if not menunggu_app.empty:
-            st.warning("⌛ Anda memiliki pengajuan penebusan yang sedang menunggu verifikasi Admin.")
+            st.warning("⌛ Menunggu verifikasi Admin...")
 
         if total_hutang > 0:
             st.error(f"Total Tunggakan: Rp {total_hutang:,}")
-            mode_tebus = st.radio("Opsi Pembayaran:", ["Tebus Semua", "Cicil Sebagian"])
-            jumlah_dibayar = st.number_input("Nominal Pembayaran:", min_value=10000, max_value=int(total_hutang), step=10000) if mode_tebus == "Cicil Sebagian" else total_hutang
-
-            metode = st.radio("Metode:", ["Bayar Tunai / Transfer", "Membersihkan Kantor"])
-            file_bukti = []
+            metode = st.radio("Metode Penebusan:", ["Transfer/Tunai", "Bersihkan Kantor"])
             
-            if metode == "Bayar Tunai / Transfer":
-                bt = st.file_uploader("Upload Bukti Bayar (JPG/PNG)", type=['jpg','png','jpeg'])
+            file_bukti = []
+            if metode == "Transfer/Tunai":
+                bt = st.file_uploader("Upload Bukti Bayar", type=['jpg','png','jpeg'])
                 if bt: file_bukti.append(bt)
             else:
-                st.info("Upload Foto Kondisi Sebelum dan Sesudah Membersihkan Kantor.")
-                f_seb = st.file_uploader("Upload Foto Sebelum (Before)", type=['jpg','png','jpeg'], key="before")
-                f_ses = st.file_uploader("Upload Foto Sesudah (After)", type=['jpg','png','jpeg'], key="after")
+                c1, c2 = st.columns(2)
+                f_seb = c1.file_uploader("Foto Sebelum", type=['jpg','png','jpeg'], key="b4")
+                f_ses = c2.file_uploader("Foto Sesudah", type=['jpg','png','jpeg'], key="af")
                 if f_seb and f_ses: file_bukti.extend([f_seb, f_ses])
             
             if st.button("Ajukan Penebusan"):
                 if not file_bukti:
-                    st.warning("⚠️ Wajib lampirkan bukti foto!")
+                    st.error("Wajib melampirkan foto bukti!")
                 else:
                     id_unik = f"{nama_tebus}_{datetime.now(timezone).strftime('%y%m%d%H%M%S')}"
                     for i, f in enumerate(file_bukti):
                         with open(os.path.join(folder_penebusan, f"{id_unik}_{i}.jpg"), "wb") as f_save:
                             f_save.write(f.getbuffer())
                     
-                    terbayar = 0
-                    for idx in idx_hutang:
-                        if terbayar < jumlah_dibayar:
-                            df_total.at[idx, 'Status Denda'] = f"Menunggu Approval ({metode})"
-                            df_total.at[idx, 'ID_Tebus'] = id_unik
-                            terbayar += df_total.at[idx, 'Denda']
-                    
+                    df_total.loc[idx_hutang, 'Status Denda'] = f"Menunggu ({metode})"
+                    df_total.loc[idx_hutang, 'ID_Tebus'] = id_unik
                     df_total.to_excel(excel_file, index=False)
-                    st.info("✅ Pengajuan dikirim ke Admin.")
-                    time.sleep(3)
+                    st.info("✅ Pengajuan dikirim!")
+                    time.sleep(2)
                     st.rerun()
         else:
-            if menunggu_app.empty:
-                st.success("Status: Bebas Denda.")
+            if menunggu_app.empty: st.success("🎉 Anda bebas denda!")
 
-# --- HALAMAN ADMIN ---
+# --- HALAMAN 3: ADMIN ---
 elif menu == "Login Admin":
     pw = st.text_input("Password Admin:", type="password")
     if pw == "galva123":
-        t1, t2, t3, t4, t5 = st.tabs(["📊 Dashboard", "🔔 Verifikasi", "📑 Laporan", "📸 Galeri", "⚙️ Pengaturan"])
+        tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "🔔 Verifikasi", "📑 Laporan"])
         
-        with t1:
-            st.subheader("Statistik Kehadiran")
+        with tab1:
             if not df_total.empty:
-                bulan_ini = datetime.now(timezone).strftime('%Y-%m')
-                df_bulan_ini = df_total[df_total['Tanggal'].str.startswith(bulan_ini)].copy()
-                pemasukan_bulan_ini = df_bulan_ini[df_bulan_ini['Status Denda'] == "Lunas (Verified) (Bayar Tunai / Transfer)"]['Denda'].sum()
-                
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2 = st.columns(2)
                 c1.metric("Total Terlambat", len(df_total[df_total['Status'] == 'TERLAMBAT']))
-                c2.metric("Denda Belum Lunas (Total)", f"Rp {df_total[df_total['Status Denda'] == 'Belum Lunas']['Denda'].sum():,}")
-                c3.metric("Menunggu Verifikasi", len(df_total[df_total['Status Denda'].str.contains("Menunggu", na=False)]))
-                c4.metric(f"Pemasukan Cash ({datetime.now(timezone).strftime('%B')})", f"Rp {pemasukan_bulan_ini:,}")
-                
-                ca, cb = st.columns(2)
-                with ca:
-                    st.write("**Top Terlambat**")
-                    st.bar_chart(df_total[df_total['Status'] == 'TERLAMBAT'].groupby('Nama').size())
-                with cb:
-                    st.write("**Status Kehadiran**")
-                    st.bar_chart(df_total.groupby('Status').size())
-            else:
-                st.info("Belum ada data.")
+                c2.metric("Total Denda", f"Rp {df_total['Denda'].sum():,}")
+                st.bar_chart(df_total.groupby('Nama')['Denda'].sum())
+            else: st.info("Data kosong")
 
-        with t2:
+        with tab2:
             pending = df_total[df_total['Status Denda'].str.contains("Menunggu", na=False)].groupby('ID_Tebus').first()
             if pending.empty:
-                st.info("Tidak ada antrean verifikasi.")
+                st.info("Tidak ada permintaan verifikasi.")
             else:
                 for id_t, row in pending.iterrows():
-                    with st.expander(f"Approval: {row['Nama']}"):
+                    with st.expander(f"Verifikasi: {row['Nama']}"):
                         bukti_f = [f for f in os.listdir(folder_penebusan) if f.startswith(str(id_t))]
-                        cols = st.columns(len(bukti_f) if bukti_f else 1)
-                        for i, img in enumerate(bukti_f):
-                            cols[i].image(os.path.join(folder_penebusan, img), use_container_width=True)
+                        for img in bukti_f:
+                            st.image(os.path.join(folder_penebusan, img), width=200)
                         
-                        metode_raw = row['Status Denda']
-                        
-                        if st.button("Setujui", key=f"y_{id_t}"):
-                            final_status = "Lunas (Verified) (Bayar Tunai / Transfer)" if "Bayar Tunai" in metode_raw else "Lunas (Verified) (Bersih Kantor)"
-                            df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = final_status
+                        col_a, col_b = st.columns(2)
+                        if col_a.button("✅ Setujui", key=f"s_{id_t}"):
+                            df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = "Lunas (Verified)"
                             df_total.to_excel(excel_file, index=False)
                             st.rerun()
-                        if st.button("Tolak", key=f"n_{id_t}"):
+                        if col_b.button("❌ Tolak", key=f"t_{id_t}"):
                             df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = "Belum Lunas"
-                            df_total.loc[df_total['ID_Tebus'] == id_t, 'ID_Tebus'] = ""
                             df_total.to_excel(excel_file, index=False)
                             st.rerun()
 
-        with t3:
-            if not df_total.empty:
-                df_total['Bulan'] = pd.to_datetime(df_total['Tanggal']).dt.strftime('%B %Y')
-                sel_bulan = st.selectbox("Pilih Bulan", df_total['Bulan'].unique())
-                df_f = df_total[df_total['Bulan'] == sel_bulan].copy()
-                st.dataframe(df_f[columns[:-1]])
-                
-                output = io.BytesIO()
-                try:
-                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                        df_f[columns[:-1]].to_excel(writer, sheet_name='Data', index=False)
-                        summary = df_f.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
-                        summary.to_excel(writer, sheet_name='Grafik')
-                        rekap_denda = df_f.groupby('Nama')['Denda'].sum().reset_index()
-                        rekap_denda.to_excel(writer, sheet_name='Rekap_Denda', index=False)
-                    st.download_button("📥 Download Excel", output.getvalue(), f"Laporan_{sel_bulan}.xlsx")
-                except:
-                    st.error("Gagal membuat Excel.")
-
-        with t4:
-            files = sorted([f for f in os.listdir(folder_foto) if f.endswith('.jpg')], reverse=True)
-            if files:
-                c = st.columns(4)
-                for i, f in enumerate(files[:12]):
-                    with c[i%4]: st.image(os.path.join(folder_foto, f), caption=f, use_container_width=True)
-
-        with t5:
-            if st.button("🚨 RESET TOTAL DATA"):
-                if os.path.exists(excel_file): os.remove(excel_file)
-                for d in [folder_foto, folder_penebusan]:
-                    if os.path.exists(d): shutil.rmtree(d)
-                inisialisasi_folder()
-                st.rerun()
+        with tab3:
+            st.dataframe(df_total)
+            # Tombol Download
+            output = io.BytesIO()
+            df_total.to_excel(output, index=False)
