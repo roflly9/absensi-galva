@@ -40,6 +40,11 @@ st.markdown("""
         justify-content: center !important; box-shadow: 0 4px 10px rgba(0,0,0,0.08) !important;
         margin-bottom: 8px !important; background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%) !important;
     }
+    /* Kotak Password Admin dengan Border Hitam */
+    .stTextInput > div > div > input {
+        border: 2px solid #000000 !important;
+        border-radius: 10px;
+    }
     .section-title { 
         font-size: 14px; font-weight: 800; color: #0d47a1; margin: 25px 0 10px 10px; 
         display: flex; align-items: center; text-transform: uppercase; 
@@ -79,6 +84,8 @@ def muat_data():
 df_total = muat_data()
 
 if 'page' not in st.session_state: st.session_state.page = 'Dashboard'
+if 'admin_logged_in' not in st.session_state: st.session_state.admin_logged_in = False
+
 def navigasi(nama_hal):
     st.session_state.page = nama_hal
     st.rerun()
@@ -161,7 +168,7 @@ elif st.session_state.page == 'Absensi':
             df_total.to_excel(excel_file, index=False)
             st.balloons(); st.success("✅ Terkirim!"); time.sleep(2); navigasi('Dashboard')
 
-# --- MENU TEBUS (PILIHAN UPLOAD UNTUK BERSIH-BERSIH) ---
+# --- MENU TEBUS ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 MENU TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Dashboard"): navigasi('Dashboard')
@@ -209,10 +216,20 @@ elif st.session_state.page == 'Tebus':
 # --- ADMIN PANEL ---
 elif st.session_state.page == 'Admin':
     st.markdown('<div class="app-header">🔐 ADMIN PANEL</div>', unsafe_allow_html=True)
-    if st.button("⬅️ Dashboard"): navigasi('Dashboard')
+    if st.button("⬅️ Dashboard"): 
+        st.session_state.admin_logged_in = False
+        navigasi('Dashboard')
     
-    pwd = st.text_input("Masukkan Password Admin:", type="password")
-    if pwd == "galva123":
+    if not st.session_state.admin_logged_in:
+        pwd = st.text_input("Masukkan Password Admin:", type="password")
+        if st.button("🔓 LOGIN ADMIN"):
+            if pwd == "galva123":
+                st.session_state.admin_logged_in = True
+                st.rerun()
+            else:
+                st.error("Password Salah!")
+    
+    if st.session_state.admin_logged_in:
         t1, t2, t3, t4, t5 = st.tabs(["📈 TREN", "📊 DATA", "✅ VERIFIKASI", "📸 FOTO", "⚙️ RESET"])
         
         with t3:
@@ -221,7 +238,7 @@ elif st.session_state.page == 'Admin':
                 for idx, row in pending.iterrows():
                     with st.expander(f"Verifikasi: {row['Nama']} | {row['Alasan']}"):
                         bukti = row['Bukti_Bayar']
-                        if isinstance(bukti, list): # Jika ada multiple foto (Before/After)
+                        if isinstance(bukti, list):
                             c1, c2 = st.columns(2)
                             c1.image(bukti[0], caption="Before", use_container_width=True)
                             c2.image(bukti[1], caption="After", use_container_width=True)
