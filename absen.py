@@ -109,7 +109,8 @@ if st.session_state.page == 'Dashboard':
     st.markdown('<p class="section-title">Status & Ringkasan</p>', unsafe_allow_html=True)
     if not df_total.empty:
         df_total['Denda'] = pd.to_numeric(df_total['Denda'], errors='coerce').fillna(0)
-        # --- PERBAIKAN LOGIKA DANA (Hanya Cash/Transfer) ---
+        
+        # Logika Dana (Hanya Cash/Transfer)
         total_setoran = df_total[
             (df_total['Status Denda'] == 'Lunas') & 
             (df_total['Alasan'].fillna('').str.contains('Cash/Transfer'))
@@ -118,13 +119,36 @@ if st.session_state.page == 'Dashboard':
         st.metric("Total Dana Pembayaran Denda (Tunai)", f"Rp {int(total_setoran):,}")
 
         if HAS_PLOTLY:
-            telat_df = df_total[df_total['Status'] == 'TERLAMBAT']
+            # --- PERBAIKAN GRAFIK: FILTER BULAN SEKARANG ---
+            waktu_skrg = datetime.now(timezone)
+            bulan_skrg = waktu_skrg.month
+            tahun_skrg = waktu_skrg.year
+            nama_bulan_skrg = waktu_skrg.strftime('%B %Y')
+
+            # Konversi kolom tanggal ke datetime untuk filter
+            df_grafik = df_total.copy()
+            df_grafik['Tanggal_DT'] = pd.to_datetime(df_grafik['Tanggal'])
+            
+            # Filter hanya bulan ini & hanya status TERLAMBAT
+            telat_df = df_grafik[
+                (df_grafik['Status'] == 'TERLAMBAT') & 
+                (df_grafik['Tanggal_DT'].dt.month == bulan_skrg) & 
+                (df_grafik['Tanggal_DT'].dt.year == tahun_skrg)
+            ]
+            
+            st.markdown(f'<p style="font-size:13px; font-weight:bold; color:#0d47a1; margin-left:10px;">GRAFIK KETERLAMBATAN - {nama_bulan_skrg.upper()}</p>', unsafe_allow_html=True)
+            
             if not telat_df.empty:
-                st.markdown('<p style="font-size:13px; font-weight:bold; color:#0d47a1; margin-left:10px;">GRAFIK KETERLAMBATAN PER USER</p>', unsafe_allow_html=True)
                 grafik_user = telat_df.groupby('Nama').size().reset_index(name='Total Telat')
-                fig = px.bar(grafik_user, x='Nama', y='Total Telat', color='Total Telat', color_continuous_scale='Reds', text_auto=True)
-                fig.update_layout(margin=dict(l=20, r=20, t=10, b=20))
+                # Urutkan dari yang paling banyak telat
+                grafik_user = grafik_user.sort_values(by='Total Telat', ascending=False)
+                
+                fig = px.bar(grafik_user, x='Nama', y='Total Telat', color='Total Telat', 
+                             color_continuous_scale='Reds', text_auto=True)
+                fig.update_layout(margin=dict(l=20, r=20, t=10, b=20), xaxis_title=None, yaxis_title="Jumlah Telat")
                 st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info(f"Belum ada keterlambatan di bulan {nama_bulan_skrg}.")
     else:
         st.info("Belum ada data aktivitas.")
 
@@ -136,7 +160,7 @@ elif st.session_state.page == 'Absensi':
     opsi = st.radio("Opsi Kehadiran:", ["Hadir di kantor", "Izin Terlambat", "Tidak masuk kantor Cuti/Sakit", "Tugas luar kota", "Langsung ke Customer"], index=0)
     
     waktu_skrg = datetime.now(timezone)
-    batas_absen = datetime.strptime("00:05:00", "%H:%M:%S").time()
+    batas_absen = datetime.strptime("08:05:00", "%H:%M:%S").time() # Jam masuk kantor
     
     alasan, img_data, denda_final, st_text = "", None, 0, ""
     
@@ -206,7 +230,6 @@ elif st.session_state.page == 'Tebus':
                         if terbayar < nominal_tebus:
                             df_total.at[idx, 'Status Denda'] = 'Menunggu Persetujuan'
                             df_total.at[idx, 'Bukti_Path'] = str(paths)
-                            # Menyimpan metode di kolom Alasan agar bisa difilter Dashboard
                             df_total.at[idx, 'Alasan'] = f"Metode: {metode} (Penebusan Rp {nominal_tebus:,})"
                             terbayar += df_total.at[idx, 'Denda']
                     df_total.to_excel(excel_file, index=False, engine='openpyxl')
