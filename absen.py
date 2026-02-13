@@ -110,7 +110,6 @@ if st.session_state.page == 'Dashboard':
     if not df_total.empty:
         df_total['Denda'] = pd.to_numeric(df_total['Denda'], errors='coerce').fillna(0)
         
-        # Logika Dana (Hanya Cash/Transfer)
         total_setoran = df_total[
             (df_total['Status Denda'] == 'Lunas') & 
             (df_total['Alasan'].fillna('').str.contains('Cash/Transfer'))
@@ -119,17 +118,14 @@ if st.session_state.page == 'Dashboard':
         st.metric("Total Dana Pembayaran Denda (Tunai)", f"Rp {int(total_setoran):,}")
 
         if HAS_PLOTLY:
-            # --- PERBAIKAN GRAFIK: FILTER BULAN SEKARANG ---
             waktu_skrg = datetime.now(timezone)
             bulan_skrg = waktu_skrg.month
             tahun_skrg = waktu_skrg.year
             nama_bulan_skrg = waktu_skrg.strftime('%B %Y')
 
-            # Konversi kolom tanggal ke datetime untuk filter
             df_grafik = df_total.copy()
             df_grafik['Tanggal_DT'] = pd.to_datetime(df_grafik['Tanggal'])
             
-            # Filter hanya bulan ini & hanya status TERLAMBAT
             telat_df = df_grafik[
                 (df_grafik['Status'] == 'TERLAMBAT') & 
                 (df_grafik['Tanggal_DT'].dt.month == bulan_skrg) & 
@@ -140,7 +136,6 @@ if st.session_state.page == 'Dashboard':
             
             if not telat_df.empty:
                 grafik_user = telat_df.groupby('Nama').size().reset_index(name='Total Telat')
-                # Urutkan dari yang paling banyak telat
                 grafik_user = grafik_user.sort_values(by='Total Telat', ascending=False)
                 
                 fig = px.bar(grafik_user, x='Nama', y='Total Telat', color='Total Telat', 
@@ -160,7 +155,7 @@ elif st.session_state.page == 'Absensi':
     opsi = st.radio("Opsi Kehadiran:", ["Hadir di kantor", "Izin Terlambat", "Tidak masuk kantor Cuti/Sakit", "Tugas luar kota", "Langsung ke Customer"], index=0)
     
     waktu_skrg = datetime.now(timezone)
-    batas_absen = datetime.strptime("08:05:00", "%H:%M:%S").time() # Jam masuk kantor
+    batas_absen = datetime.strptime("08:05:00", "%H:%M:%S").time() 
     
     alasan, img_data, denda_final, st_text = "", None, 0, ""
     
@@ -254,11 +249,49 @@ elif st.session_state.page == 'Admin':
         t1, t2, t3, t4, t5 = st.tabs(["📈 TREN", "📊 DATA", "✅ VERIFIKASI", "📸 FOTO", "⚙️ RESET"])
         
         with t1:
-            if HAS_PLOTLY and not df_total.empty:
-                telat_df = df_total[df_total['Status'] == 'TERLAMBAT']
-                if not telat_df.empty:
-                    grafik = px.bar(telat_df.groupby('Tanggal').size().reset_index(name='Jumlah'), x='Tanggal', y='Jumlah')
-                    st.plotly_chart(grafik, use_container_width=True)
+            if not df_total.empty:
+                # Filter Data Bulan Berjalan
+                waktu_skrg = datetime.now(timezone)
+                df_tren = df_total.copy()
+                df_tren['Tanggal_DT'] = pd.to_datetime(df_tren['Tanggal'])
+                df_bulan_ini = df_tren[
+                    (df_tren['Tanggal_DT'].dt.month == waktu_skrg.month) & 
+                    (df_tren['Tanggal_DT'].dt.year == waktu_skrg.year)
+                ]
+
+                # 1. Grafik Kehadiran dalam sebulan
+                st.markdown("### 📊 Ringkasan Kehadiran Bulan Ini")
+                if HAS_PLOTLY and not df_bulan_ini.empty:
+                    pie_data = df_bulan_ini['Status'].value_counts().reset_index()
+                    pie_data.columns = ['Status', 'Jumlah']
+                    fig_pie = px.pie(pie_data, values='Jumlah', names='Status', 
+                                    color_discrete_sequence=px.colors.qualitative.Pastel)
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                else:
+                    st.info("Belum ada data kehadiran bulan ini.")
+
+                st.divider()
+
+                # 2. Total Dana Belum Lunas & Daftar Nama
+                st.markdown("### 💰 Ringkasan Hutang Denda (Belum Lunas)")
+                df_total['Denda'] = pd.to_numeric(df_total['Denda'], errors='coerce').fillna(0)
+                df_unpaid = df_total[df_total['Status Denda'] == 'Belum Lunas']
+                
+                total_piutang = df_unpaid['Denda'].sum()
+                st.metric("Total Denda Belum Tertagih", f"Rp {int(total_piutang):,}")
+
+                if not df_unpaid.empty:
+                    # Kelompokkan per Nama
+                    list_hutang = df_unpaid.groupby('Nama')['Denda'].sum().reset_index()
+                    list_hutang = list_hutang.sort_values(by='Denda', ascending=False)
+                    list_hutang.columns = ['Nama Karyawan', 'Total Hutang (Rp)']
+                    
+                    # Tampilkan Tabel Sederhana
+                    st.table(list_hutang.style.format({"Total Hutang (Rp)": "{:,.0f}"}))
+                else:
+                    st.success("Luar biasa! Tidak ada tunggakan denda.")
+            else:
+                st.info("Belum ada data untuk dianalisis.")
 
         with t2: # --- TAB DATA (FILTER BULAN) ---
             if not df_total.empty:
