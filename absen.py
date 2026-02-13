@@ -23,18 +23,6 @@ st.markdown("""
         overflow-x: hidden;
     }
 
-    /* FIX GRID: Memaksa kolom tetap 50:50 di HP agar tidak perlu geser */
-    [data-testid="column"] {
-        width: 48% !important;
-        flex: 1 1 48% !important;
-        min-width: 48% !important;
-    }
-    
-    [data-testid="stHorizontalBlock"] {
-        gap: 0.4rem !important;
-        margin-bottom: -10px !important;
-    }
-
     .stApp {
         background-color: #f8f9fa;
     }
@@ -64,35 +52,36 @@ st.markdown("""
         border: 2px solid white;
         font-weight: bold;
         position: relative;
+        z-index: 10;
     }
 
-    /* TOMBOL MENU - SEMUA BIRU SERAGAM SESUAI JUDUL */
+    /* TOMBOL MENU - MEMANJANG KE KANAN (FULL WIDTH) & WARNA BIRU SERAGAM */
     div.stButton > button {
-        height: 125px !important; 
+        height: 65px !important; 
         width: 100% !important;
-        border-radius: 20px !important;
+        border-radius: 15px !important;
         border: none !important;
         color: white !important;
         font-weight: 700 !important;
-        font-size: 12px !important;
+        font-size: 15px !important;
         display: flex !important;
-        flex-direction: column !important;
+        flex-direction: row !important;
         align-items: center !important;
         justify-content: center !important;
-        box-shadow: 0 6px 15px rgba(0,0,0,0.1) !important;
-        white-space: normal !important;
-        line-height: 1.4 !important;
-        transition: transform 0.2s ease;
-        /* WARNA BIRU SESUAI WARNA KOTAK JUDUL/HEADER */
+        box-shadow: 0 4px 10px rgba(0,0,0,0.08) !important;
+        margin-bottom: 8px !important;
+        transition: all 0.2s ease;
+        /* WARNA BIRU SERAGAM SESUAI HEADER */
         background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%) !important;
     }
 
     div.stButton > button:hover {
         background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%) !important;
+        box-shadow: 0 6px 15px rgba(0,0,0,0.15) !important;
     }
 
     div.stButton > button:active {
-        transform: scale(0.92);
+        transform: scale(0.98);
         background: #0d47a1 !important;
     }
 
@@ -101,9 +90,10 @@ st.markdown("""
         font-size: 14px;
         font-weight: 800;
         color: #0d47a1;
-        margin: 20px 0 10px 10px;
+        margin: 25px 0 10px 10px;
         display: flex;
         align-items: center;
+        text-transform: uppercase;
     }
     .section-title::before {
         content: "";
@@ -151,21 +141,14 @@ if st.session_state.page == 'Dashboard':
     st.markdown('<div class="app-header">🏢 GALVA MANADO</div>', unsafe_allow_html=True)
     st.markdown('<div class="welcome-box">PRESENSI & DENDA</div>', unsafe_allow_html=True)
 
-    # SEKSI 1: AKTIVITAS KARYAWAN (2 Kolom Sejajar)
+    # SEKSI 1: AKTIVITAS KARYAWAN (Tombol Memanjang Ke Kanan)
     st.markdown('<p class="section-title">Aktivitas Karyawan</p>', unsafe_allow_html=True)
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📝\n\nMULAI\nABSENSI"): navigasi('Absensi')
-    with col2:
-        if st.button("💰\n\nTEBUS\nDENDA"): navigasi('Tebus')
+    if st.button("📝 &nbsp; MULAI ABSENSI"): navigasi('Absensi')
+    if st.button("💰 &nbsp; TEBUS DENDA"): navigasi('Tebus')
 
-    # SEKSI 2: MENU PENGELOLA (Tepat di bawah seksi 1)
+    # SEKSI 2: MENU PENGELOLA (Tombol Memanjang Ke Kanan)
     st.markdown('<p class="section-title">Menu Pengelola</p>', unsafe_allow_html=True)
-    col3, col4 = st.columns(2)
-    with col3:
-        if st.button("🔐\n\nADMIN\nPANEL"): navigasi('Admin')
-    with col4:
-        st.empty() 
+    if st.button("🔐 &nbsp; ADMIN PANEL"): navigasi('Admin')
 
     # SEKSI 3: STATUS HARI INI
     st.markdown('<p class="section-title">Status Hari Ini</p>', unsafe_allow_html=True)
@@ -192,11 +175,12 @@ elif st.session_state.page == 'Absensi':
     opsi = st.radio("Keterangan:", ["Hadir di Kantor", "Izin Terlambat", "Tugas Luar", "Sakit/Cuti"])
     
     waktu_skrg = datetime.now(timezone)
-    st.info(f"🕒 Waktu: {waktu_skrg.strftime('%H:%M:%S')} WITA")
+    st.info(f"🕒 Waktu Server: {waktu_skrg.strftime('%H:%M:%S')} WITA")
     img = st.camera_input("Ambil Foto Selfie")
     
     if st.button("🚀 KIRIM ABSENSI"):
         if nama != "Pilih Nama" and img:
+            # Toleransi absen sampai 08:05
             is_telat = waktu_skrg.hour > 8 or (waktu_skrg.hour == 8 and waktu_skrg.minute > 5)
             denda = 10000 if (opsi == "Hadir di Kantor" and is_telat) else 0
             status = "TERLAMBAT" if denda > 0 else opsi.upper()
@@ -208,17 +192,17 @@ elif st.session_state.page == 'Absensi':
             
             df_total = pd.concat([df_total, data_baru], ignore_index=True)
             df_total.to_excel(excel_file, index=False)
-            st.success("✅ Absensi Berhasil!")
-            time.sleep(1)
+            st.success("✅ Absensi Berhasil Terkirim!")
+            time.sleep(1.5)
             navigasi('Dashboard')
         else:
-            st.error("Nama dan Foto wajib diisi!")
+            st.error("Nama dan Foto Selfie wajib diisi!")
 
 # --- HALAMAN TEBUS DENDA ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
-    st.write("Daftar denda Anda akan tampil di sini.")
+    st.info("Fitur konfirmasi pembayaran denda sedang disiapkan.")
 
 # --- HALAMAN ADMIN PANEL ---
 elif st.session_state.page == 'Admin':
@@ -227,5 +211,10 @@ elif st.session_state.page == 'Admin':
     
     pw = st.text_input("Password Admin:", type="password")
     if pw == "galva123":
+        st.write("### Rekap Data Absensi")
         st.dataframe(df_total, use_container_width=True)
-        st.download_button("📊 Download Excel", data=open(excel_file, "rb"), file_name="rekap_absensi.xlsx")
+        st.download_button(
+            label="📊 Download Excel",
+            data=open(excel_file, "rb"),
+            file_name=f"rekap_absensi_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        )
