@@ -1,9 +1,10 @@
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 import pandas as pd
 import pytz 
 import time
+import plotly.express as px
 
 # --- 1. KONFIGURASI HALAMAN & UI ---
 st.set_page_config(page_title="Absensi Galva Manado", page_icon="🏢", layout="wide")
@@ -70,7 +71,7 @@ st.markdown("""
         background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%) !important;
     }
 
-    /* Input Password Admin Styling - Bis Hitam Tebal */
+    /* Input Password Admin Styling */
     .stTextInput > div > div > input {
         border: 2px solid #000000 !important;
         border-radius: 10px !important;
@@ -105,7 +106,6 @@ st.markdown("""
         margin: 15px 0;
     }
     .status-card.terlambat { border-left: 10px solid #d32f2f; }
-    .status-card.tunggu { border-left: 10px solid #ffa000; }
 
     div[data-testid="stMetric"] {
         background: white !important;
@@ -119,7 +119,8 @@ st.markdown("""
 # --- 2. SETUP DATA & FILE ---
 timezone = pytz.timezone('Asia/Makassar')
 excel_file = "report_absensi.xlsx"
-columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda", "Status Denda"]
+# Kolom lengkap termasuk penyimpanan Foto (dalam format bytes untuk Excel/Session)
+columns = ["Tanggal", "Jam", "Nama", "Status", "Alasan", "Denda", "Status Denda", "Foto_Absen", "Bukti_Bayar"]
 karyawan_list = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"]
 
 if os.path.exists(excel_file):
@@ -182,49 +183,30 @@ elif st.session_state.page == 'Absensi':
     batas_absen = datetime.strptime("08:05:00", "%H:%M:%S").time()
     
     is_telat = (opsi == "Hadir di kantor" and jam_skrg > batas_absen)
-    is_izin_terlambat = (opsi == "Izin terlambat")
-    is_cuti_sakit = (opsi == "Tidak masuk kantor Cuti/Sakit")
-    is_tugas_luar = (opsi == "Tugas Luar kota")
-    is_ke_customer = (opsi == "Langsung ke customer")
     
     if is_telat: card_class, st_text, dn_text, icon = "status-card terlambat", "TERLAMBAT", "Rp 10.000", "⚠️"
-    elif is_izin_terlambat: card_class, st_text, dn_text, icon = "status-card izin", "IJIN TERLAMBAT", "Rp 0", "ℹ️"
-    elif is_cuti_sakit: card_class, st_text, dn_text, icon = "status-card izin", "CUTI / SAKIT", "Rp 0", "ℹ️"
-    elif is_tugas_luar: card_class, st_text, dn_text, icon = "status-card dinas", "DINAS LUAR KOTA", "Rp 0", "✈️"
-    elif is_ke_customer: card_class, st_text, dn_text, icon = "status-card customer", "LANGSUNG KE CUSTOMER", "Rp 0", "🚗"
-    else: card_class, st_text, dn_text, icon = "status-card", "HADIR TEPAT WAKTU", "Rp 0", "✅"
+    else: card_class, st_text, dn_text, icon = "status-card", opsi.upper(), "Rp 0", "✅"
 
     st.markdown(f"""<div class="{card_class}"><h2 style="margin:5px 0;">{waktu_skrg.strftime('%H:%M:%S')} WITA</h2><span>Status: <b>{icon} {st_text}</b></span> | <b>Denda: {dn_text}</b></div>""", unsafe_allow_html=True)
 
-    alasan_val, foto_bukti, img_selfie, lokasi_ket = "", None, None, ""
-
-    if is_izin_terlambat or is_cuti_sakit:
-        alasan_val = st.text_area("Masukkan Alasan:")
-        foto_bukti = st.file_uploader("Upload Foto Bukti:", type=['jpg', 'jpeg', 'png', 'pdf'])
-    elif is_tugas_luar:
-        lokasi_ket = st.text_area("Sedang dinas di mana?", placeholder="Contoh: Dinas di Tondano...")
-    elif is_ke_customer:
-        lokasi_ket = st.text_area("Ke customer mana hari ini?", placeholder="Contoh: Ke Bank SulutGo...")
-        img_selfie = st.camera_input("Ambil Foto Selfie di Lokasi Customer")
-    else:
-        img_selfie = st.camera_input("Ambil Foto Selfie Kehadiran")
+    img_selfie = st.camera_input("Ambil Foto Selfie Kehadiran")
 
     if st.button("🚀 KIRIM ABSENSI"):
-        if nama == "Pilih Nama": st.error("Gagal! Pilih Nama Anda.")
+        if nama == "Pilih Nama" or img_selfie is None: 
+            st.error("Gagal! Pilih Nama dan Ambil Foto Selfie.")
         else:
             denda_final = 10000 if is_telat else 0
-            alasan_simpan = f"Dinas: {lokasi_ket}" if is_tugas_luar else (f"Customer: {lokasi_ket}" if is_ke_customer else (alasan_val if (is_izin_terlambat or is_cuti_sakit) else opsi))
-            data_baru = pd.DataFrame([[waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"), nama, st_text, alasan_simpan, denda_final, "Belum Lunas" if denda_final > 0 else "Lunas"]], columns=columns)
+            # Simpan data
+            data_baru = pd.DataFrame([[waktu_skrg.date(), waktu_skrg.strftime("%H:%M:%S"), nama, st_text, opsi, denda_final, "Belum Lunas" if denda_final > 0 else "Lunas", img_selfie.getvalue(), None]], columns=columns)
             df_total = pd.concat([df_total, data_baru], ignore_index=True)
             df_total.to_excel(excel_file, index=False)
-            st.balloons(); st.success(f"✅ Terkirim! Status: {st_text}"); time.sleep(2); navigasi('Dashboard')
+            st.balloons(); st.success(f"✅ Terkirim!"); time.sleep(2); navigasi('Dashboard')
 
 # --- C. TEBUS DENDA ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 MENU TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Dashboard"): navigasi('Dashboard')
     
-    st.markdown('<p class="section-title">Pilih Nama untuk Cek Denda</p>', unsafe_allow_html=True)
     user_pilih = st.selectbox("Nama Karyawan:", karyawan_list)
     
     if user_pilih != "Pilih Nama":
@@ -232,48 +214,21 @@ elif st.session_state.page == 'Tebus':
         total_denda_user = user_df['Denda'].sum()
         
         if total_denda_user > 0:
-            st.markdown(f"""
-                <div class="status-card terlambat">
-                    <p style="margin:0; font-weight:bold; color:gray;">TOTAL TUNGGAKAN</p>
-                    <h2 style="color:#d32f2f; margin:5px 0;">Rp {total_denda_user:,}</h2>
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'<div class="status-card terlambat">TOTAL TUNGGAKAN: <b>Rp {total_denda_user:,}</b></div>', unsafe_allow_html=True)
+            f_bukti = st.file_uploader("Upload Bukti Pembayaran (Foto Uang/Transfer):", type=['jpg','png','jpeg'])
             
-            metode = st.radio("Pilih Metode Penebusan:", ["Bayar Cash/Transfer", "Membersihkan Kantor"])
-            
-            nominal_tebus = st.number_input(f"Jumlah denda yang ingin ditebus (Min. 10.000)", 
-                                           min_value=10000, 
-                                           max_value=int(total_denda_user), 
-                                           step=10000)
-            
-            bukti_valid = False
-            if metode == "Bayar Cash/Transfer":
-                st.info("Harap upload foto uang cash atau screenshot bukti transfer.")
-                f_bukti = st.file_uploader("Upload Bukti Pembayaran:", type=['jpg','png','jpeg'], key="tf")
-                if f_bukti: bukti_valid = True
-            else:
-                st.warning("Harap upload foto area kantor sebelum dan sesudah dibersihkan.")
-                col1, col2 = st.columns(2)
-                with col1: f_before = st.file_uploader("📸 Upload Foto SEBELUM", type=['jpg','png','jpeg'], key="bfr")
-                with col2: f_after = st.file_uploader("📸 Upload Foto SESUDAH", type=['jpg','png','jpeg'], key="aft")
-                if f_before and f_after: bukti_valid = True
-
             if st.button("✅ KONFIRMASI PENEBUSAN"):
-                if not bukti_valid:
-                    st.error("Gagal! Mohon lengkapi seluruh foto/bukti yang diminta.")
+                if not f_bukti:
+                    st.error("Gagal! Mohon lampirkan foto bukti pembayaran.")
                 else:
-                    indices = df_total[(df_total['Nama'] == user_pilih) & (df_total['Status Denda'] == 'Belum Lunas')].index
-                    bayar_temp = 0
-                    for idx in indices:
-                        if bayar_temp < nominal_tebus:
-                            df_total.at[idx, 'Status Denda'] = 'Menunggu Persetujuan'
-                            bayar_temp += df_total.at[idx, 'Denda']
-                    
+                    # Update status ke Menunggu Persetujuan dan simpan foto bukti
+                    mask = (df_total['Nama'] == user_pilih) & (df_total['Status Denda'] == 'Belum Lunas')
+                    df_total.loc[mask, 'Status Denda'] = 'Menunggu Persetujuan'
+                    df_total.loc[mask, 'Bukti_Bayar'] = f_bukti.getvalue()
                     df_total.to_excel(excel_file, index=False)
-                    st.success("Berhasil! Menunggu konfirmasi Admin untuk melunaskan status denda Anda.")
-                    time.sleep(3); navigasi('Dashboard')
+                    st.success("Berhasil! Menunggu konfirmasi Admin."); time.sleep(2); navigasi('Dashboard')
         else:
-            st.success(f"Bebas Denda! {user_pilih} tidak memiliki tunggakan.")
+            st.success(f"{user_pilih} tidak memiliki tunggakan.")
 
 # --- D. ADMIN PANEL ---
 elif st.session_state.page == 'Admin':
@@ -282,39 +237,78 @@ elif st.session_state.page == 'Admin':
     
     if not st.session_state.admin_authenticated:
         st.markdown('<p class="section-title">Verifikasi Admin</p>', unsafe_allow_html=True)
-        
-        # Kotak password
         pswd = st.text_input("Masukkan Password Admin:", type="password")
-        
-        # Tombol login selalu muncul secara permanen di bawah kotak password
         if st.button("🔓 MASUK ADMIN"):
             if pswd == "galva123":
                 st.session_state.admin_authenticated = True
                 st.rerun()
-            elif pswd == "":
-                st.warning("Silakan masukkan password.")
-            else:
-                st.error("Password Salah!")
+            else: st.error("Password Salah!")
     else:
-        tab_rekap, tab_acc = st.tabs(["📊 SEMUA DATA", "✅ ACC PEMBAYARAN"])
+        tab_dash, tab_rekap, tab_acc, tab_foto, tab_reset = st.tabs(["📈 DASHBOARD", "📊 REKAPAN BULANAN", "✅ ACC PEMBAYARAN", "📸 FOTO ABSEN", "⚙️ RESET"])
         
+        # 1. Dashboard Grafik
+        with tab_dash:
+            if not df_total.empty:
+                df_dash = df_total.copy()
+                df_dash['Tanggal'] = pd.to_datetime(df_dash['Tanggal'])
+                df_telat = df_dash[df_dash['Status'] == 'TERLAMBAT']
+                if not df_telat.empty:
+                    grafik_data = df_telat.groupby(df_telat['Tanggal'].dt.date).size().reset_index(name='Jumlah Terlambat')
+                    fig = px.bar(grafik_data, x='Tanggal', y='Jumlah Terlambat', title='Tren Keterlambatan Karyawan (Harian)', color_discrete_sequence=['#d32f2f'])
+                    st.plotly_chart(fig, use_container_width=True)
+                else: st.info("Tidak ada data keterlambatan untuk ditampilkan di grafik.")
+            else: st.info("Belum ada data.")
+
+        # 2. Rekapan Semua Data (Filter 1 Bulan)
         with tab_rekap:
-            st.dataframe(df_total, use_container_width=True)
-            st.download_button("📊 Download Excel", data=open(excel_file, "rb"), file_name="rekap_absensi.xlsx")
-            
+            if not df_total.empty:
+                df_view = df_total.drop(columns=['Foto_Absen', 'Bukti_Bayar'])
+                st.dataframe(df_view, use_container_width=True)
+                st.download_button("📊 Download Excel", data=open(excel_file, "rb"), file_name="rekap_absensi_full.xlsx")
+            else: st.info("Data kosong.")
+
+        # 3. ACC Pembayaran dengan Bukti
         with tab_acc:
             df_tunggu = df_total[df_total['Status Denda'] == 'Menunggu Persetujuan']
             if not df_tunggu.empty:
-                st.warning(f"Terdapat {len(df_tunggu)} baris denda menunggu persetujuan.")
-                st.dataframe(df_tunggu[['Tanggal', 'Nama', 'Status', 'Denda']], use_container_width=True)
-                
-                list_nama_tunggu = df_tunggu['Nama'].unique()
-                acc_nama = st.selectbox("Pilih Nama untuk di-ACC:", list_nama_tunggu)
-                
-                if st.button(f"Sahkan Pembayaran {acc_nama}"):
-                    df_total.loc[(df_total['Nama'] == acc_nama) & (df_total['Status Denda'] == 'Menunggu Persetujuan'), 'Status Denda'] = 'Lunas'
-                    df_total.to_excel(excel_file, index=False)
-                    st.success(f"Pembayaran {acc_nama} telah disahkan (Lunas).")
-                    time.sleep(1); st.rerun()
-            else:
-                st.info("Tidak ada pengajuan penebusan denda saat ini.")
+                st.warning(f"Terdapat {len(df_tunggu['Nama'].unique())} orang menunggu persetujuan.")
+                for nama_user in df_tunggu['Nama'].unique():
+                    with st.expander(f"Cek Bukti Pembayaran: {nama_user}"):
+                        user_row = df_tunggu[df_tunggu['Nama'] == nama_user].iloc[0]
+                        if user_row['Bukti_Bayar']:
+                            st.image(user_row['Bukti_Bayar'], caption=f"Bukti dari {nama_user}", width=300)
+                        
+                        col1, col2 = st.columns(2)
+                        if col1.button(f"Sahkan (Lunas) - {nama_user}"):
+                            df_total.loc[(df_total['Nama'] == nama_user) & (df_total['Status Denda'] == 'Menunggu Persetujuan'), 'Status Denda'] = 'Lunas'
+                            df_total.to_excel(excel_file, index=False)
+                            st.success("Tersimpan!"); time.sleep(1); st.rerun()
+                        if col2.button(f"Tolak Bukti - {nama_user}"):
+                            df_total.loc[(df_total['Nama'] == nama_user) & (df_total['Status Denda'] == 'Menunggu Persetujuan'), 'Status Denda'] = 'Belum Lunas'
+                            df_total.to_excel(excel_file, index=False)
+                            st.error("Bukti Ditolak!"); time.sleep(1); st.rerun()
+            else: st.info("Tidak ada pembayaran menunggu.")
+
+        # 4. Rekapan Foto Absen
+        with tab_foto:
+            st.subheader("Koleksi Foto Absen Selfie")
+            if not df_total.empty:
+                # Menampilkan 4 foto per baris
+                rows = [df_total.iloc[i:i+4] for i in range(0, len(df_total), 4)]
+                for row_data in rows:
+                    cols = st.columns(4)
+                    for i, (idx, item) in enumerate(row_data.iterrows()):
+                        if item['Foto_Absen']:
+                            with cols[i]:
+                                st.image(item['Foto_Absen'], caption=f"{item['Nama']} ({item['Tanggal']})", use_container_width=True)
+            else: st.info("Belum ada foto.")
+
+        # 5. Tombol Reset
+        with tab_reset:
+            st.subheader("Pembersihan Database")
+            st.error("PERHATIAN: Tombol ini akan menghapus seluruh data yang tersimpan di sistem secara permanen.")
+            if st.button("🔥 RESET SEMUA DATA SEKARANG"):
+                if os.path.exists(excel_file):
+                    os.remove(excel_file)
+                    st.success("Semua data telah dihapus.")
+                    time.sleep(2); st.rerun()
