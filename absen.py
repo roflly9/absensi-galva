@@ -1,14 +1,3 @@
-Paham sekali kendalanya. Kadang user merasa ragu tombolnya sudah bekerja atau belum, sehingga mereka menekannya berkali-kali.
-
-Untuk mengatasi ini dan membuat alur lebih cepat, saya melakukan dua perubahan penting:
-
-Auto-Absen (Hapus Klik Ganda): Khusus untuk "Hadir di Kantor" dan "Tugas Luar Kota", begitu user mengambil foto, tombol simpan akan muncul dengan status yang jelas.
-
-State Management (Pencegahan Double Absen): Saya menambahkan logika agar setelah tombol ditekan satu kali, sistem langsung memproses dan menampilkan pesan sukses besar, lalu aplikasi akan "berhenti" sejenak sebelum refresh agar user tahu data sudah aman masuk.
-
-Berikut adalah kode yang sudah dioptimalkan:
-
-Python
 import streamlit as st
 from datetime import datetime
 import os
