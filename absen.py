@@ -283,17 +283,18 @@ elif st.session_state.page == 'Admin':
     if not st.session_state.admin_authenticated:
         st.markdown('<p class="section-title">Verifikasi Admin</p>', unsafe_allow_html=True)
         
-        # Perubahan: Menggunakan label kosong dan penanganan input yang lebih responsif
+        # Kotak password
         pswd = st.text_input("Masukkan Password Admin:", type="password")
         
-        # Logika: Jika ada karakter di variabel pswd, tombol langsung muncul
-        if pswd != "":
-            if st.button("🔓 MASUK ADMIN"):
-                if pswd == "galva123":
-                    st.session_state.admin_authenticated = True
-                    st.rerun()
-                else:
-                    st.error("Password Salah! Akses Ditolak.")
+        # Tombol login selalu muncul secara permanen di bawah kotak password
+        if st.button("🔓 MASUK ADMIN"):
+            if pswd == "galva123":
+                st.session_state.admin_authenticated = True
+                st.rerun()
+            elif pswd == "":
+                st.warning("Silakan masukkan password.")
+            else:
+                st.error("Password Salah!")
     else:
         tab_rekap, tab_acc = st.tabs(["📊 SEMUA DATA", "✅ ACC PEMBAYARAN"])
         
