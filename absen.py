@@ -109,8 +109,13 @@ if st.session_state.page == 'Dashboard':
     st.markdown('<p class="section-title">Status & Ringkasan</p>', unsafe_allow_html=True)
     if not df_total.empty:
         df_total['Denda'] = pd.to_numeric(df_total['Denda'], errors='coerce').fillna(0)
-        total_setoran = df_total[df_total['Status Denda'] == 'Lunas']['Denda'].sum()
-        st.metric("Total Dana Pembayaran Denda", f"Rp {int(total_setoran):,}")
+        # --- PERBAIKAN LOGIKA DANA (Hanya Cash/Transfer) ---
+        total_setoran = df_total[
+            (df_total['Status Denda'] == 'Lunas') & 
+            (df_total['Alasan'].fillna('').str.contains('Cash/Transfer'))
+        ]['Denda'].sum()
+        
+        st.metric("Total Dana Pembayaran Denda (Tunai)", f"Rp {int(total_setoran):,}")
 
         if HAS_PLOTLY:
             telat_df = df_total[df_total['Status'] == 'TERLAMBAT']
@@ -201,6 +206,7 @@ elif st.session_state.page == 'Tebus':
                         if terbayar < nominal_tebus:
                             df_total.at[idx, 'Status Denda'] = 'Menunggu Persetujuan'
                             df_total.at[idx, 'Bukti_Path'] = str(paths)
+                            # Menyimpan metode di kolom Alasan agar bisa difilter Dashboard
                             df_total.at[idx, 'Alasan'] = f"Metode: {metode} (Penebusan Rp {nominal_tebus:,})"
                             terbayar += df_total.at[idx, 'Denda']
                     df_total.to_excel(excel_file, index=False, engine='openpyxl')
@@ -231,7 +237,7 @@ elif st.session_state.page == 'Admin':
                     grafik = px.bar(telat_df.groupby('Tanggal').size().reset_index(name='Jumlah'), x='Tanggal', y='Jumlah')
                     st.plotly_chart(grafik, use_container_width=True)
 
-        with t2: # --- PERBAIKAN BAGIAN TAB DATA ---
+        with t2: # --- TAB DATA (FILTER BULAN) ---
             if not df_total.empty:
                 df_temp = df_total.copy()
                 df_temp['Tanggal'] = pd.to_datetime(df_temp['Tanggal'])
