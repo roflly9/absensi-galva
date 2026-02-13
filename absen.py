@@ -13,39 +13,84 @@ st.set_page_config(page_title="Absensi Galva Manado", page_icon="🏢", layout="
 
 st.markdown("""
     <style>
+    /* Sembunyikan Header Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    .logo-container { display: flex; justify-content: center; margin-bottom: 5px; }
+    /* Background Dasar */
+    .stApp {
+        background-color: #f8f9fa;
+    }
 
-    .btn-main div button {
-        width: 100% !important;
-        border-radius: 15px !important;
-        height: 5em !important;
-        font-size: 20px !important;
-        font-weight: bold !important;
-        background-color: #0046ad !important;
+    /* Container Logo Tengah */
+    .logo-container { 
+        display: flex; 
+        justify-content: center; 
+        align-items: center;
+        padding: 20px 0;
+    }
+
+    /* Tombol Admin di Pojok Kanan Atas */
+    .admin-corner {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 999;
+    }
+
+    /* Tombol Utama (Absen & Tebus) - Android Style */
+    .btn-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .stButton > button {
+        border-radius: 20px !important;
+        transition: all 0.3s ease;
+    }
+
+    /* Spesifik untuk Tombol Menu Utama */
+    .btn-main-style div button {
+        width: 320px !important; /* Ukuran pas untuk Mobile/Desktop */
+        height: 80px !important;
+        font-size: 22px !important;
+        font-weight: 800 !important;
+        background: linear-gradient(145deg, #0046ad, #0056d6) !important;
         color: white !important;
         border: none !important;
-        box-shadow: 0 4px 15px rgba(0,70,173,0.3);
-        margin-bottom: 15px;
+        box-shadow: 0 8px 16px rgba(0,70,173,0.3) !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
 
-    .btn-admin div button {
-        background-color: #f0f2f6 !important;
+    .btn-main-style div button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 20px rgba(0,70,173,0.4) !important;
+        background: #0056d6 !important;
+    }
+
+    /* Tombol Admin Kecil */
+    .btn-admin-style div button {
+        background-color: #ffffff !important;
         color: #495057 !important;
-        border: 1px solid #ced4da !important;
-        height: 3em !important;
-        border-radius: 10px !important;
+        border: 1px solid #dee2e6 !important;
+        height: 40px !important;
+        font-size: 14px !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
     }
 
-    .stMetric {
-        background-color: white;
-        padding: 15px;
-        border-radius: 15px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        border: 1px solid #eee;
+    /* Styling Metric */
+    [data-testid="stMetric"] {
+        background-color: white !important;
+        padding: 20px !important;
+        border-radius: 20px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+        border: 1px solid #f0f0f0 !important;
+        text-align: center;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -81,42 +126,56 @@ def navigasi(page_name):
 
 # --- 3. DASHBOARD UTAMA ---
 if st.session_state.page == 'Dashboard':
-    top_col1, top_col2, top_col3 = st.columns([1, 2, 1])
-    with top_col2:
-        st.markdown('<div class="logo-container">', unsafe_allow_html=True)
-        try: st.image("images.png", width=140)
-        except: st.subheader("🏢 Galva Manado")
-        st.markdown('</div>', unsafe_allow_html=True)
-    with top_col3:
-        st.markdown('<div class="btn-admin">', unsafe_allow_html=True)
+    # Tombol Admin di Kanan Atas
+    st.markdown('<div class="admin-corner">', unsafe_allow_html=True)
+    col_adm_1, col_adm_2 = st.columns([6, 1])
+    with col_adm_2:
+        st.markdown('<div class="btn-admin-style">', unsafe_allow_html=True)
         if st.button("🔐 Admin"): navigasi('Admin')
         st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="btn-main">', unsafe_allow_html=True)
-    if st.button("📝 ABSENSI KARYAWAN"): navigasi('Absensi')
-    if st.button("💰 PENEBUSAN DENDA"): navigasi('Tebus')
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # Logo Tengah
+    st.markdown('<div class="logo-container">', unsafe_allow_html=True)
+    try: st.image("images.png", width=180)
+    except: st.title("🏢 Galva Manado")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Tombol Menu Utama Rata Tengah
+    st.markdown('<div class="btn-container">', unsafe_allow_html=True)
+    
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+    with col_btn2:
+        st.markdown('<div class="btn-main-style">', unsafe_allow_html=True)
+        if st.button("📝 ABSENSI"): navigasi('Absensi')
+        st.write("") # Spacer
+        if st.button("💰 TEBUS DENDA"): navigasi('Tebus')
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Statistik (Tetap)
+    st.markdown("<br><br>", unsafe_allow_html=True)
     st.divider()
     st.subheader("📊 Statistik Kehadiran (Real-time)")
+    
     if not df_total.empty:
         total_terlambat = len(df_total[df_total['Status'] == 'TERLAMBAT'])
         hutang = df_total[df_total['Status Denda'] == 'Belum Lunas']['Denda'].sum()
-        
-        # FIX: Hanya hitung denda masuk jika status mengandung "Verified" DAN metodenya BUKAN "Membersihkan Kantor"
         mask_cash = (df_total['Status Denda'].str.contains("Verified", na=False)) & (~df_total['Status Denda'].str.contains("Membersihkan Kantor", na=False))
         cash = df_total[mask_cash]['Denda'].sum()
         
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Terlambat", f"{total_terlambat} Kali")
         m2.metric("Hutang Belum Bayar", f"Rp {hutang:,}")
-        m3.metric("Total Uang Denda (Cash)", f"Rp {cash:,}")
+        m3.metric("Uang Denda (Cash)", f"Rp {cash:,}")
         
         rekap = df_total[df_total['Status'] == 'TERLAMBAT'].groupby('Nama').size().reset_index(name='Jumlah')
         st.bar_chart(rekap.set_index('Nama'))
-    else: st.info("Belum ada data.")
+    else: 
+        st.info("Belum ada data.")
 
-# --- 4. HALAMAN ABSENSI ---
+# --- 4. HALAMAN ABSENSI (LOGIKA TETAP) ---
 elif st.session_state.page == 'Absensi':
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
     st.header("📝 Absensi Karyawan")
@@ -152,7 +211,7 @@ elif st.session_state.page == 'Absensi':
                 st.success("✅ Berhasil!")
                 time.sleep(1); navigasi('Dashboard')
 
-# --- 5. HALAMAN TEBUS ---
+# --- 5. HALAMAN TEBUS (LOGIKA TETAP) ---
 elif st.session_state.page == 'Tebus':
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
     st.header("💰 Penebusan Denda")
@@ -172,7 +231,6 @@ elif st.session_state.page == 'Tebus':
                 jumlah_bayar = st.number_input(f"Nominal Cicilan (Max Rp {total_h:,}):", min_value=1000, max_value=int(total_h), step=1000)
 
             bukti_1, bukti_2 = None, None
-            
             if metode == "Membersihkan Kantor":
                 st.info("💡 Wajib upload foto Sebelum dan Sesudah.")
                 col_f1, col_f2 = st.columns(2)
@@ -191,7 +249,6 @@ elif st.session_state.page == 'Tebus':
                 if ready:
                     id_u = f"{nama_tebus}_{datetime.now(timezone).strftime('%y%m%d%H%M%S')}"
                     catatan = f"Pengajuan {tipe_pembayaran} sebesar Rp {jumlah_bayar:,}"
-                    
                     df_total.loc[idx_h, 'Status Denda'] = f"Menunggu Approval ({metode})"
                     df_total.loc[idx_h, 'ID_Tebus'] = id_u
                     df_total.loc[idx_h, 'Alasan'] = catatan 
@@ -204,20 +261,17 @@ elif st.session_state.page == 'Tebus':
                         bukti_2.seek(0)
                         with open(os.path.join(folder_penebusan, f"{id_u}_2.jpg"), "wb") as f:
                             f.write(bukti_2.getbuffer())
-                            
                     st.success("✅ Terkirim! Menunggu verifikasi Admin.")
                     time.sleep(2); navigasi('Dashboard')
         else: st.success("Status: BEBAS DENDA.")
 
-# --- 6. HALAMAN ADMIN ---
+# --- 6. HALAMAN ADMIN (LOGIKA TETAP) ---
 elif st.session_state.page == 'Admin':
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
     pw = st.text_input("Password Admin:", type="password")
     if pw == "galva123":
         t1, t2, t3, t4, t5 = st.tabs(["📊 Statistik", "🔔 Verifikasi", "📑 Laporan", "📸 Galeri", "⚙️ Reset"])
-        
         with t1:
-            # Statistik Admin juga diperbaiki logikanya
             mask_cash_adm = (df_total['Status Denda'].str.contains("Verified", na=False)) & (~df_total['Status Denda'].str.contains("Membersihkan Kantor", na=False))
             c1, c2, c3 = st.columns(3)
             c1.metric("Total Terlambat", len(df_total[df_total['Status'] == 'TERLAMBAT']))
@@ -231,18 +285,14 @@ elif st.session_state.page == 'Admin':
                 for id_t in pending_ids:
                     if id_t == "": continue
                     row_info = df_total[df_total['ID_Tebus'] == id_t].iloc[0]
-                    # Mendeteksi apakah ini metode "Membersihkan Kantor" dari status denda
                     is_cleaning = "Membersihkan Kantor" in row_info['Status Denda']
-                    
                     with st.expander(f"Penebusan: {row_info['Nama']} - {row_info['Alasan']}"):
                         p1, p2 = os.path.join(folder_penebusan, f"{id_t}_1.jpg"), os.path.join(folder_penebusan, f"{id_t}_2.jpg")
                         v_col1, v_col2 = st.columns(2)
-                        if os.path.exists(p1): v_col1.image(p1, caption="Bukti Bayar / Foto Sebelum", use_container_width=True)
-                        if os.path.exists(p2): v_col2.image(p2, caption="Foto Sesudah", use_container_width=True)
-                        
+                        if os.path.exists(p1): v_col1.image(p1, caption="Bukti / Sebelum", use_container_width=True)
+                        if os.path.exists(p2): v_col2.image(p2, caption="Sesudah", use_container_width=True)
                         c_acc, c_rej = st.columns(2)
                         if c_acc.button("✅ Setujui", key=f"y_{id_t}"):
-                            # Saat disetujui, simpan metodenya di status agar filter dashboard bekerja
                             new_status = "Lunas (Verified - Membersihkan Kantor)" if is_cleaning else "Lunas (Verified - Cash)"
                             df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = new_status
                             df_total.to_excel(excel_file, index=False); st.rerun()
