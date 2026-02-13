@@ -70,6 +70,12 @@ st.markdown("""
         background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%) !important;
     }
 
+    /* Input Password Admin Styling */
+    .stTextInput > div > div > input {
+        border: 2px solid black !important;
+        border-radius: 10px !important;
+    }
+
     /* Section Titles */
     .section-title {
         font-size: 14px;
@@ -126,6 +132,7 @@ else:
     df_total = pd.DataFrame(columns=columns)
 
 if 'page' not in st.session_state: st.session_state.page = 'Dashboard'
+if 'admin_authenticated' not in st.session_state: st.session_state.admin_authenticated = False
 
 def navigasi(page_name):
     st.session_state.page = page_name
@@ -133,7 +140,7 @@ def navigasi(page_name):
 
 # --- 3. LOGIKA HALAMAN ---
 
-# --- A. DASHBOARD (FIXED) ---
+# --- A. DASHBOARD ---
 if st.session_state.page == 'Dashboard':
     st.markdown('<div class="app-header">🏢 GALVA MANADO</div>', unsafe_allow_html=True)
     st.markdown('<div class="welcome-box">PRESENSI & DENDA</div>', unsafe_allow_html=True)
@@ -143,7 +150,9 @@ if st.session_state.page == 'Dashboard':
     if st.button("💰 &nbsp; TEBUS DENDA"): navigasi('Tebus')
 
     st.markdown('<p class="section-title">Menu Pengelola</p>', unsafe_allow_html=True)
-    if st.button("🔐 &nbsp; ADMIN PANEL"): navigasi('Admin')
+    if st.button("🔐 &nbsp; ADMIN PANEL"): 
+        st.session_state.admin_authenticated = False # Reset login setiap masuk
+        navigasi('Admin')
 
     st.markdown('<p class="section-title">Status & Ringkasan Hari Ini</p>', unsafe_allow_html=True)
     if not df_total.empty:
@@ -160,7 +169,7 @@ if st.session_state.page == 'Dashboard':
     else:
         st.info("Belum ada data aktivitas.")
 
-# --- B. FORM ABSENSI (FIXED) ---
+# --- B. FORM ABSENSI ---
 elif st.session_state.page == 'Absensi':
     st.markdown('<div class="app-header">📝 FORM ABSENSI</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Menu"): navigasi('Dashboard')
@@ -210,7 +219,7 @@ elif st.session_state.page == 'Absensi':
             df_total.to_excel(excel_file, index=False)
             st.balloons(); st.success(f"✅ Terkirim! Status: {st_text}"); time.sleep(2); navigasi('Dashboard')
 
-# --- C. TEBUS DENDA (UPDATE METODE BERSIH-BERSIH: CUKUP UPLOAD FOTO) ---
+# --- C. TEBUS DENDA ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 MENU TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Dashboard"): navigasi('Dashboard')
@@ -266,13 +275,25 @@ elif st.session_state.page == 'Tebus':
         else:
             st.success(f"Bebas Denda! {user_pilih} tidak memiliki tunggakan.")
 
-# --- D. ADMIN PANEL (ACC MENU) ---
+# --- D. ADMIN PANEL (NEW: PASSWORD BORDER & LOGIN BUTTON) ---
 elif st.session_state.page == 'Admin':
     st.markdown('<div class="app-header">🔐 ADMIN PANEL</div>', unsafe_allow_html=True)
     if st.button("⬅️ Dashboard"): navigasi('Dashboard')
-    pswd = st.text_input("Password Admin:", type="password")
     
-    if pswd == "galva123":
+    if not st.session_state.admin_authenticated:
+        st.markdown('<p class="section-title">Verifikasi Admin</p>', unsafe_allow_html=True)
+        pswd = st.text_input("Masukkan Password Admin:", type="password", help="Kotak bergaris hitam wajib diisi")
+        
+        # Tombol login hanya muncul jika input password tidak kosong
+        if pswd:
+            if st.button("🔓 MASUK ADMIN"):
+                if pswd == "galva123":
+                    st.session_state.admin_authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Password Salah! Akses Ditolak.")
+    else:
+        # Jika sudah login, tampilkan konten Admin
         tab_rekap, tab_acc = st.tabs(["📊 SEMUA DATA", "✅ ACC PEMBAYARAN"])
         
         with tab_rekap:
