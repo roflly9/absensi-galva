@@ -136,7 +136,7 @@ elif st.session_state.page == 'Absensi':
     opsi = st.radio("Opsi Kehadiran:", ["Hadir di kantor", "Izin Terlambat", "Tidak masuk kantor Cuti/Sakit", "Tugas luar kota", "Langsung ke Customer"], index=0)
     
     waktu_skrg = datetime.now(timezone)
-    batas_absen = datetime.strptime("08:05:00", "%H:%M:%S").time()
+    batas_absen = datetime.strptime("00:05:00", "%H:%M:%S").time()
     
     alasan, img_data, denda_final, st_text = "", None, 0, ""
     
