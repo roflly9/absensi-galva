@@ -105,17 +105,20 @@ elif menu == "Tebus Denda":
 
             metode = st.radio("Metode:", ["Bayar Tunai / Transfer", "Membersihkan Kantor"])
             file_bukti = []
+            
             if metode == "Bayar Tunai / Transfer":
-                bt = st.file_uploader("Upload Bukti", type=['jpg','png','jpeg'])
+                bt = st.file_uploader("Upload Bukti Bayar (JPG/PNG)", type=['jpg','png','jpeg'])
                 if bt: file_bukti.append(bt)
             else:
-                f_seb = st.camera_input("Foto Sebelum")
-                f_ses = st.camera_input("Foto Sesudah")
+                # PERUBAHAN DISINI: Sekarang menggunakan File Uploader untuk Before/After
+                st.info("Upload Foto Kondisi Sebelum dan Sesudah Membersihkan Kantor.")
+                f_seb = st.file_uploader("Upload Foto Sebelum (Before)", type=['jpg','png','jpeg'], key="before")
+                f_ses = st.file_uploader("Upload Foto Sesudah (After)", type=['jpg','png','jpeg'], key="after")
                 if f_seb and f_ses: file_bukti.extend([f_seb, f_ses])
             
             if st.button("Ajukan Penebusan"):
                 if not file_bukti:
-                    st.warning("⚠️ Wajib lampirkan bukti!")
+                    st.warning("⚠️ Wajib lampirkan bukti foto!")
                 else:
                     id_unik = f"{nama_tebus}_{datetime.now(timezone).strftime('%y%m%d%H%M%S')}"
                     for i, f in enumerate(file_bukti):
@@ -144,7 +147,6 @@ elif menu == "Login Admin":
         with t1: # DASHBOARD
             st.subheader("Statistik Kehadiran")
             if not df_total.empty:
-                # Logika Baru: Total Pemasukan Nominal (Hanya Lunas Verified via Bayar Tunai / Transfer)
                 total_pemasukan = df_total[df_total['Status Denda'] == "Lunas (Verified) (Bayar Tunai / Transfer)"]['Denda'].sum()
                 
                 c1, c2, c3, c4 = st.columns(4)
@@ -175,11 +177,9 @@ elif menu == "Login Admin":
                         for i, img in enumerate(bukti_f):
                             cols[i].image(os.path.join(folder_penebusan, img), use_container_width=True)
                         
-                        # Ambil keterangan metode dari status denda saat ini
-                        metode_raw = row['Status Denda'] # Misal: "Menunggu Approval (Bayar Tunai / Transfer)"
+                        metode_raw = row['Status Denda']
                         
                         if st.button("Setujui", key=f"y_{id_t}"):
-                            # Jika disetujui, labeli dengan metode agar masuk ke hitungan Dashboard
                             if "Bayar Tunai" in metode_raw:
                                 final_status = "Lunas (Verified) (Bayar Tunai / Transfer)"
                             else:
@@ -210,7 +210,7 @@ elif menu == "Login Admin":
                         writer.sheets['Grafik'].insert_chart('E2', chart)
                     st.download_button("📥 Download Excel", output.getvalue(), f"Laporan_{sel_bulan}.xlsx")
                 except Exception as e:
-                    st.error(f"Gagal membuat Excel: Pastikan library 'xlsxwriter' sudah terinstal.")
+                    st.error(f"Gagal membuat Excel.")
 
         with t4: # GALERI
             files = sorted([f for f in os.listdir(folder_foto) if f.endswith('.jpg')], reverse=True)
