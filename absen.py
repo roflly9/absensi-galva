@@ -141,13 +141,17 @@ elif menu == "Login Admin":
     if pw == "galva123":
         t1, t2, t3, t4, t5 = st.tabs(["📊 Dashboard", "🔔 Verifikasi", "📑 Laporan", "📸 Galeri", "⚙️ Pengaturan"])
         
-        with t1: # DASHBOARD FIX
+        with t1: # DASHBOARD
             st.subheader("Statistik Kehadiran")
             if not df_total.empty:
-                c1, c2, c3 = st.columns(3)
+                # Logika Baru: Total Pemasukan Nominal (Hanya Lunas Verified via Bayar Tunai / Transfer)
+                total_pemasukan = df_total[df_total['Status Denda'] == "Lunas (Verified) (Bayar Tunai / Transfer)"]['Denda'].sum()
+                
+                c1, c2, c3, c4 = st.columns(4)
                 c1.metric("Total Terlambat", len(df_total[df_total['Status'] == 'TERLAMBAT']))
                 c2.metric("Denda Belum Lunas", f"Rp {df_total[df_total['Status Denda'] == 'Belum Lunas']['Denda'].sum():,}")
                 c3.metric("Menunggu Verifikasi", len(df_total[df_total['Status Denda'].str.contains("Menunggu", na=False)]))
+                c4.metric("Total Pemasukan Cash", f"Rp {total_pemasukan:,}")
                 
                 ca, cb = st.columns(2)
                 with ca:
@@ -170,14 +174,24 @@ elif menu == "Login Admin":
                         cols = st.columns(len(bukti_f) if bukti_f else 1)
                         for i, img in enumerate(bukti_f):
                             cols[i].image(os.path.join(folder_penebusan, img), use_container_width=True)
+                        
+                        # Ambil keterangan metode dari status denda saat ini
+                        metode_raw = row['Status Denda'] # Misal: "Menunggu Approval (Bayar Tunai / Transfer)"
+                        
                         if st.button("Setujui", key=f"y_{id_t}"):
-                            df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = "Lunas (Verified)"
+                            # Jika disetujui, labeli dengan metode agar masuk ke hitungan Dashboard
+                            if "Bayar Tunai" in metode_raw:
+                                final_status = "Lunas (Verified) (Bayar Tunai / Transfer)"
+                            else:
+                                final_status = "Lunas (Verified) (Bersih Kantor)"
+                                
+                            df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = final_status
                             df_total.to_excel(excel_file, index=False); st.rerun()
                         if st.button("Tolak", key=f"n_{id_t}"):
                             df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = "Belum Lunas"
                             df_total.to_excel(excel_file, index=False); st.rerun()
 
-        with t3: # LAPORAN (DENGAN PROTEKSI ENGINE)
+        with t3: # LAPORAN
             if not df_total.empty:
                 df_total['Bulan'] = pd.to_datetime(df_total['Tanggal']).dt.strftime('%B %Y')
                 sel_bulan = st.selectbox("Pilih Bulan", df_total['Bulan'].unique())
