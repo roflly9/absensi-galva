@@ -13,39 +13,42 @@ st.set_page_config(page_title="Absensi Galva Manado", page_icon="🏢", layout="
 
 st.markdown("""
     <style>
-    /* Sembunyikan Header Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Background Dasar */
     .stApp {
         background-color: #f8f9fa;
     }
 
-    /* Container Logo Tengah */
-    .logo-container { 
-        display: flex; 
-        justify-content: center; 
-        align-items: center;
-        padding: 20px 0;
+    /* 1. Judul & Logo Paling Atas */
+    .header-container {
+        text-align: center;
+        padding-top: 10px;
+        margin-bottom: 0px;
+    }
+    .header-container h1 {
+        font-size: 32px !important;
+        color: #0046ad;
+        margin-bottom: 5px;
     }
 
-    /* Tombol Admin di Pojok Kanan Atas */
-    .admin-corner {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 999;
+    /* 2. Admin Bar di Bawah Judul */
+    .admin-bar {
+        display: flex;
+        justify-content: flex-end;
+        padding-right: 20px;
+        margin-bottom: 20px;
     }
 
-    /* Tombol Utama (Absen & Tebus) - Android Style */
-    .btn-container {
+    /* 3. Tombol Utama Tengah & Besar */
+    .main-menu-container {
         display: flex;
         flex-direction: column;
         align-items: center;
+        justify-content: center;
         gap: 20px;
-        margin-top: 20px;
+        padding: 20px 0;
     }
 
     .stButton > button {
@@ -53,49 +56,41 @@ st.markdown("""
         transition: all 0.3s ease;
     }
 
-    /* Spesifik untuk Tombol Menu Utama */
+    /* Styling Tombol Menu Utama */
     .btn-main-style div button {
-        width: 320px !important; /* Ukuran pas untuk Mobile/Desktop */
-        height: 80px !important;
-        font-size: 22px !important;
+        width: 380px !important; /* Lebih besar */
+        height: 90px !important; /* Lebih tinggi */
+        font-size: 24px !important;
         font-weight: 800 !important;
         background: linear-gradient(145deg, #0046ad, #0056d6) !important;
         color: white !important;
         border: none !important;
-        box-shadow: 0 8px 16px rgba(0,70,173,0.3) !important;
+        box-shadow: 0 10px 20px rgba(0,70,173,0.3) !important;
         text-transform: uppercase;
-        letter-spacing: 1px;
     }
 
-    .btn-main-style div button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 12px 20px rgba(0,70,173,0.4) !important;
-        background: #0056d6 !important;
-    }
-
-    /* Tombol Admin Kecil */
+    /* Styling Tombol Admin */
     .btn-admin-style div button {
         background-color: #ffffff !important;
         color: #495057 !important;
         border: 1px solid #dee2e6 !important;
+        padding: 5px 20px !important;
         height: 40px !important;
-        font-size: 14px !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+        font-weight: bold !important;
     }
 
-    /* Styling Metric */
+    /* Statistik Card */
     [data-testid="stMetric"] {
         background-color: white !important;
         padding: 20px !important;
         border-radius: 20px !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
         border: 1px solid #f0f0f0 !important;
-        text-align: center;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SETUP DATA ---
+# --- 2. SETUP DATA (TETAP) ---
 timezone = pytz.timezone('Asia/Makassar')
 excel_file = "report_absensi.xlsx"
 folder_foto = "hasil_absen"
@@ -126,36 +121,36 @@ def navigasi(page_name):
 
 # --- 3. DASHBOARD UTAMA ---
 if st.session_state.page == 'Dashboard':
-    # Tombol Admin di Kanan Atas
-    st.markdown('<div class="admin-corner">', unsafe_allow_html=True)
-    col_adm_1, col_adm_2 = st.columns([6, 1])
-    with col_adm_2:
+    # 1. Judul dan Ikon (Paling Atas)
+    st.markdown('<div class="header-container">', unsafe_allow_html=True)
+    try:
+        st.image("images.png", width=120)
+    except:
+        st.markdown("<h1>🏢</h1>", unsafe_allow_html=True)
+    st.markdown("<h1>GALVA MANADO</h1>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 2. Bar Admin (Pojok Kanan Bawah Judul)
+    c_empty, c_adm = st.columns([6, 1])
+    with c_adm:
         st.markdown('<div class="btn-admin-style">', unsafe_allow_html=True)
-        if st.button("🔐 Admin"): navigasi('Admin')
+        if st.button("🔐 ADMIN"): navigasi('Admin')
         st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Logo Tengah
-    st.markdown('<div class="logo-container">', unsafe_allow_html=True)
-    try: st.image("images.png", width=180)
-    except: st.title("🏢 Galva Manado")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Tombol Menu Utama Rata Tengah
-    st.markdown('<div class="btn-container">', unsafe_allow_html=True)
+    # 3. Menu Utama (Tengah & Besar)
+    st.markdown('<div class="main-menu-container">', unsafe_allow_html=True)
     
-    col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
-    with col_btn2:
+    col_mid_1, col_mid_2, col_mid_3 = st.columns([1, 2, 1])
+    with col_mid_2:
         st.markdown('<div class="btn-main-style">', unsafe_allow_html=True)
-        if st.button("📝 ABSENSI"): navigasi('Absensi')
-        st.write("") # Spacer
+        if st.button("📝 MULAI ABSENSI"): navigasi('Absensi')
+        st.write("") # Jarak antar tombol
         if st.button("💰 TEBUS DENDA"): navigasi('Tebus')
         st.markdown('</div>', unsafe_allow_html=True)
         
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Statistik (Tetap)
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    # 4. Statistik (Bawah)
     st.divider()
     st.subheader("📊 Statistik Kehadiran (Real-time)")
     
@@ -173,7 +168,7 @@ if st.session_state.page == 'Dashboard':
         rekap = df_total[df_total['Status'] == 'TERLAMBAT'].groupby('Nama').size().reset_index(name='Jumlah')
         st.bar_chart(rekap.set_index('Nama'))
     else: 
-        st.info("Belum ada data.")
+        st.info("Belum ada data tersedia.")
 
 # --- 4. HALAMAN ABSENSI (LOGIKA TETAP) ---
 elif st.session_state.page == 'Absensi':
