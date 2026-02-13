@@ -210,7 +210,7 @@ elif st.session_state.page == 'Absensi':
             df_total.to_excel(excel_file, index=False)
             st.balloons(); st.success(f"✅ Terkirim! Status: {st_text}"); time.sleep(2); navigasi('Dashboard')
 
-# --- C. TEBUS DENDA (NOMINAL & STATUS MENUNGGU) ---
+# --- C. TEBUS DENDA (UPDATE METODE BERSIH-BERSIH: CUKUP UPLOAD FOTO) ---
 elif st.session_state.page == 'Tebus':
     st.markdown('<div class="app-header">💰 MENU TEBUS DENDA</div>', unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Dashboard"): navigasi('Dashboard')
@@ -232,30 +232,28 @@ elif st.session_state.page == 'Tebus':
             
             metode = st.radio("Pilih Metode Penebusan:", ["Bayar Cash/Transfer", "Membersihkan Kantor"])
             
-            nominal_tebus = st.number_input(f"Jumlah yang ingin dibayar (Min. 10.000)", 
+            nominal_tebus = st.number_input(f"Jumlah denda yang ingin ditebus (Min. 10.000)", 
                                            min_value=10000, 
                                            max_value=int(total_denda_user), 
                                            step=10000)
             
-            bukti = None
+            bukti_valid = False
             if metode == "Bayar Cash/Transfer":
                 st.info("Harap upload foto uang cash atau screenshot bukti transfer.")
-                bukti = st.file_uploader("Upload Bukti Pembayaran:", type=['jpg','png','jpeg'])
+                f_bukti = st.file_uploader("Upload Bukti Pembayaran:", type=['jpg','png','jpeg'], key="tf")
+                if f_bukti: bukti_valid = True
             else:
-                st.warning("Harap ambil foto area kantor Sebelum & Sesudah dibersihkan.")
+                st.warning("Harap upload foto area kantor sebelum dan sesudah dibersihkan.")
                 col1, col2 = st.columns(2)
-                with col1: f_before = st.camera_input("📸 Foto SEBELUM")
-                with col2: f_after = st.camera_input("📸 Foto SESUDAH")
-                if f_before and f_after:
-                    bukti = True
+                with col1: f_before = st.file_uploader("📸 Upload Foto SEBELUM", type=['jpg','png','jpeg'], key="bfr")
+                with col2: f_after = st.file_uploader("📸 Upload Foto SESUDAH", type=['jpg','png','jpeg'], key="aft")
+                if f_before and f_after: bukti_valid = True
 
             if st.button("✅ KONFIRMASI PENEBUSAN"):
-                if not bukti:
-                    st.error("Gagal! Bukti (Foto/File) wajib dilampirkan.")
+                if not bukti_valid:
+                    st.error("Gagal! Mohon lengkapi seluruh foto/bukti yang diminta.")
                 else:
-                    # Update baris denda yang belum lunas menjadi 'Menunggu Persetujuan'
                     indices = df_total[(df_total['Nama'] == user_pilih) & (df_total['Status Denda'] == 'Belum Lunas')].index
-                    
                     bayar_temp = 0
                     for idx in indices:
                         if bayar_temp < nominal_tebus:
@@ -263,10 +261,10 @@ elif st.session_state.page == 'Tebus':
                             bayar_temp += df_total.at[idx, 'Denda']
                     
                     df_total.to_excel(excel_file, index=False)
-                    st.success("Berhasil! Status denda Anda kini: 'Menunggu Persetujuan Admin'.")
+                    st.success("Berhasil! Menunggu konfirmasi Admin untuk melunaskan status denda Anda.")
                     time.sleep(3); navigasi('Dashboard')
         else:
-            st.success(f"Disiplin Mantap! {user_pilih} tidak memiliki tunggakan denda.")
+            st.success(f"Bebas Denda! {user_pilih} tidak memiliki tunggakan.")
 
 # --- D. ADMIN PANEL (ACC MENU) ---
 elif st.session_state.page == 'Admin':
