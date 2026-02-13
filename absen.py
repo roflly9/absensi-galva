@@ -87,19 +87,19 @@ if menu == "Absensi Karyawan":
                         fname = f"{waktu_klik.strftime('%Y%m%d_%H%M%S')}_{nama}.jpg"
                         with open(os.path.join(folder_foto, fname), "wb") as f:
                             f.write(img_file.getbuffer())
-                    st.success("✅ Absensi Berhasil!")
-                    time.sleep(1); st.rerun()
+                    
+                    st.success(f"✅ Absensi Berhasil dikirim pada {waktu_klik.strftime('%H:%M:%S')}!")
+                    time.sleep(3)
+                    st.rerun()
 
 # --- HALAMAN TEBUS DENDA ---
 elif menu == "Tebus Denda":
     st.subheader("Penebusan Denda")
     nama_tebus = st.selectbox("Pilih Nama:", Karyawan_List)
     if nama_tebus != "Pilih Nama":
-        # Ambil daftar hutang yang beneran Belum Lunas (bukan yang sedang menunggu approval)
         idx_hutang = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'] == 'Belum Lunas')].index
         total_hutang = df_total.loc[idx_hutang, 'Denda'].sum()
         
-        # Cek apakah ada yang sedang menunggu approval
         menunggu_app = df_total[(df_total['Nama'] == nama_tebus) & (df_total['Status Denda'].str.contains("Menunggu", na=False))]
         
         if not menunggu_app.empty:
@@ -134,14 +134,14 @@ elif menu == "Tebus Denda":
                     terbayar = 0
                     for idx in idx_hutang:
                         if terbayar < jumlah_dibayar:
-                            # Status berubah menjadi MENUNGGU, bukan Lunas
                             df_total.at[idx, 'Status Denda'] = f"Menunggu Approval ({metode})"
                             df_total.at[idx, 'ID_Tebus'] = id_unik
                             terbayar += df_total.at[idx, 'Denda']
                     
                     df_total.to_excel(excel_file, index=False)
-                    st.info("✅ Pengajuan dikirim. Status Anda saat ini: Menunggu Persetujuan Admin.")
-                    time.sleep(2); st.rerun()
+                    st.info("✅ Pengajuan dikirim ke Admin.")
+                    time.sleep(3)
+                    st.rerun()
         else:
             if menunggu_app.empty:
                 st.success("Status: Bebas Denda.")
@@ -152,14 +152,11 @@ elif menu == "Login Admin":
     if pw == "galva123":
         t1, t2, t3, t4, t5 = st.tabs(["📊 Dashboard", "🔔 Verifikasi", "📑 Laporan", "📸 Galeri", "⚙️ Pengaturan"])
         
-        with t1: # DASHBOARD
+        with t1:
             st.subheader("Statistik Kehadiran")
             if not df_total.empty:
-                # Filter untuk bulan berjalan saja (Metrik Dashboard Bulanan)
                 bulan_ini = datetime.now(timezone).strftime('%Y-%m')
                 df_bulan_ini = df_total[df_total['Tanggal'].str.startswith(bulan_ini)].copy()
-                
-                # Hitung pemasukan khusus bulan ini dari Cash/Transfer yang sudah Verified
                 pemasukan_bulan_ini = df_bulan_ini[df_bulan_ini['Status Denda'] == "Lunas (Verified) (Bayar Tunai / Transfer)"]['Denda'].sum()
                 
                 c1, c2, c3, c4 = st.columns(4)
@@ -170,15 +167,15 @@ elif menu == "Login Admin":
                 
                 ca, cb = st.columns(2)
                 with ca:
-                    st.write("**Top Terlambat (Semua Waktu)**")
+                    st.write("**Top Terlambat**")
                     st.bar_chart(df_total[df_total['Status'] == 'TERLAMBAT'].groupby('Nama').size())
                 with cb:
-                    st.write("**Status Kehadiran (Semua Waktu)**")
+                    st.write("**Status Kehadiran**")
                     st.bar_chart(df_total.groupby('Status').size())
             else:
                 st.info("Belum ada data.")
 
-        with t2: # VERIFIKASI
+        with t2:
             pending = df_total[df_total['Status Denda'].str.contains("Menunggu", na=False)].groupby('ID_Tebus').first()
             if pending.empty:
                 st.info("Tidak ada antrean verifikasi.")
@@ -193,20 +190,17 @@ elif menu == "Login Admin":
                         metode_raw = row['Status Denda']
                         
                         if st.button("Setujui", key=f"y_{id_t}"):
-                            if "Bayar Tunai" in metode_raw:
-                                final_status = "Lunas (Verified) (Bayar Tunai / Transfer)"
-                            else:
-                                final_status = "Lunas (Verified) (Bersih Kantor)"
-                                
+                            final_status = "Lunas (Verified) (Bayar Tunai / Transfer)" if "Bayar Tunai" in metode_raw else "Lunas (Verified) (Bersih Kantor)"
                             df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = final_status
-                            df_total.to_excel(excel_file, index=False); st.rerun()
+                            df_total.to_excel(excel_file, index=False)
+                            st.rerun()
                         if st.button("Tolak", key=f"n_{id_t}"):
-                            # Jika ditolak kembali ke Belum Lunas
-                            df_total.loc[df_total['ID_Tebus'] == id_t, 'ID_Tebus'] = ""
                             df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = "Belum Lunas"
-                            df_total.to_excel(excel_file, index=False); st.rerun()
+                            df_total.loc[df_total['ID_Tebus'] == id_t, 'ID_Tebus'] = ""
+                            df_total.to_excel(excel_file, index=False)
+                            st.rerun()
 
-        with t3: # LAPORAN
+        with t3:
             if not df_total.empty:
                 df_total['Bulan'] = pd.to_datetime(df_total['Tanggal']).dt.strftime('%B %Y')
                 sel_bulan = st.selectbox("Pilih Bulan", df_total['Bulan'].unique())
@@ -219,28 +213,23 @@ elif menu == "Login Admin":
                         df_f[columns[:-1]].to_excel(writer, sheet_name='Data', index=False)
                         summary = df_f.groupby(['Nama', 'Status']).size().unstack(fill_value=0)
                         summary.to_excel(writer, sheet_name='Grafik')
-                        # Tambahkan sheet rekap denda di Excel
                         rekap_denda = df_f.groupby('Nama')['Denda'].sum().reset_index()
                         rekap_denda.to_excel(writer, sheet_name='Rekap_Denda', index=False)
-                        
-                        chart = writer.book.add_chart({'type': 'column'})
-                        for i in range(len(summary.columns)):
-                            chart.add_series({'name':['Grafik',0,i+1],'categories':['Grafik',1,0,len(summary),0],'values':['Grafik',1,i+1,len(summary),i+1]})
-                        writer.sheets['Grafik'].insert_chart('E2', chart)
                     st.download_button("📥 Download Excel", output.getvalue(), f"Laporan_{sel_bulan}.xlsx")
-                except Exception as e:
-                    st.error(f"Gagal membuat Excel.")
+                except:
+                    st.error("Gagal membuat Excel.")
 
-        with t4: # GALERI
+        with t4:
             files = sorted([f for f in os.listdir(folder_foto) if f.endswith('.jpg')], reverse=True)
             if files:
                 c = st.columns(4)
                 for i, f in enumerate(files[:12]):
                     with c[i%4]: st.image(os.path.join(folder_foto, f), caption=f, use_container_width=True)
 
-        with t5: # RESET
+        with t5:
             if st.button("🚨 RESET TOTAL DATA"):
                 if os.path.exists(excel_file): os.remove(excel_file)
                 for d in [folder_foto, folder_penebusan]:
                     if os.path.exists(d): shutil.rmtree(d)
-                inisialisasi_folder(); st.rerun()
+                inisialisasi_folder()
+                st.rerun()
