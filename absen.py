@@ -19,7 +19,6 @@ st.markdown("""
     
     .logo-container { display: flex; justify-content: center; margin-bottom: 5px; }
 
-    /* Tombol Utama (Absen & Tebus) - Full Width */
     .btn-main div button {
         width: 100% !important;
         border-radius: 15px !important;
@@ -33,7 +32,6 @@ st.markdown("""
         margin-bottom: 15px;
     }
 
-    /* Tombol Admin - Pojok Kanan Atas */
     .btn-admin div button {
         background-color: #f0f2f6 !important;
         color: #495057 !important;
@@ -121,7 +119,6 @@ elif st.session_state.page == 'Absensi':
     st.header("📝 Absensi Karyawan")
     Karyawan_List = ["Pilih Nama", "David", "Endra", "Eric", "P.Gerald", "Nofri", "Ricky", "Roflly", "Romasta", "Sendhy", "Steven", "Valentine", "Waldy", "Yulisfer"]
     nama = st.selectbox("Pilih Nama:", Karyawan_List)
-    
     opsi = st.radio("Tipe Kehadiran:", ["Hadir di Kantor", "Izin Terlambat", "Tidak Masuk Kantor Cuti/Sakit", "Tugas Luar Kota", "Langsung ke Customer"])
     
     waktu_skrg = datetime.now(timezone)
@@ -163,109 +160,123 @@ elif st.session_state.page == 'Tebus':
         total_h = df_total.loc[idx_h, 'Denda'].sum()
         
         if total_h > 0:
-            st.error(f"Total Tunggakan Anda: Rp {total_h:,}")
+            st.error(f"Total Tunggakan: Rp {total_h:,}")
             metode = st.radio("Metode Penebusan:", ["Bayar Tunai / Transfer", "Membersihkan Kantor"])
+            tipe_pembayaran = st.selectbox("Tipe Penebusan:", ["Lunas", "Cicil"])
             
-            # FITUR BARU: Pilihan Lunas atau Cicil
-            tipe_pembayaran = st.selectbox("Pilih Tipe Penebusan:", ["Lunas", "Cicil"])
             jumlah_bayar = total_h
             if tipe_pembayaran == "Cicil":
-                jumlah_bayar = st.number_input(f"Masukkan nominal yang ingin dibayar (Max Rp {total_h:,}):", min_value=1000, max_value=int(total_h), step=1000)
+                jumlah_bayar = st.number_input(f"Nominal Cicilan (Max Rp {total_h:,}):", min_value=1000, max_value=int(total_h), step=1000)
+
+            # INPUT FOTO BERDASARKAN METODE
+            bukti_1 = None
+            bukti_2 = None
             
-            st.write(f"Nominal yang diajukan: **Rp {jumlah_bayar:,}**")
-            f_bukti = st.file_uploader("Upload Bukti Foto (Resi/Selfie Bersih Kantor)", type=['jpg','png','jpeg'])
-            
+            if metode == "Membersihkan Kantor":
+                st.info("💡 Wajib upload foto Sebelum dan Sesudah membersihkan.")
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    bukti_1 = st.file_uploader("📸 Foto SEBELUM", type=['jpg','jpeg','png'], key="bef")
+                with col_f2:
+                    bukti_2 = st.file_uploader("📸 Foto SESUDAH", type=['jpg','jpeg','png'], key="aft")
+            else:
+                bukti_1 = st.file_uploader("📸 Upload Bukti Transfer/Bayar", type=['jpg','jpeg','png'], key="trf")
+
             if st.button("🚀 AJUKAN KE ADMIN"):
-                if f_bukti:
+                ready = False
+                if metode == "Membersihkan Kantor":
+                    if bukti_1 and bukti_2: ready = True
+                    else: st.warning("⚠️ Harap upload kedua foto (Sebelum & Sesudah)!")
+                else:
+                    if bukti_1: ready = True
+                    else: st.warning("⚠️ Harap upload bukti pembayaran!")
+
+                if ready:
                     id_u = f"{nama_tebus}_{datetime.now(timezone).strftime('%y%m%d%H%M%S')}"
-                    
-                    # Simpan catatan pembayaran sementara di kolom Alasan untuk referensi Admin
                     catatan = f"Pengajuan {tipe_pembayaran} sebesar Rp {jumlah_bayar:,}"
                     
-                    # Update baris yang dipilih menjadi status Menunggu
-                    df_total.loc[idx_h, 'Status Denda'] = f"Menunggu Approval ({metode} - {tipe_pembayaran})"
+                    df_total.loc[idx_h, 'Status Denda'] = f"Menunggu Approval ({metode})"
                     df_total.loc[idx_h, 'ID_Tebus'] = id_u
                     df_total.loc[idx_h, 'Alasan'] = catatan 
-                    
                     df_total.to_excel(excel_file, index=False)
                     
-                    # Simpan Foto Bukti
-                    with open(os.path.join(folder_penebusan, f"{id_u}.jpg"), "wb") as f:
-                        f.write(f_bukti.getbuffer())
-                        
-                    st.success("✅ Pengajuan berhasil dikirim! Silakan tunggu persetujuan Admin.")
+                    # Simpan Foto
+                    bukti_1.seek(0)
+                    with open(os.path.join(folder_penebusan, f"{id_u}_1.jpg"), "wb") as f:
+                        f.write(bukti_1.getbuffer())
+                    if bukti_2:
+                        bukti_2.seek(0)
+                        with open(os.path.join(folder_penebusan, f"{id_u}_2.jpg"), "wb") as f:
+                            f.write(bukti_2.getbuffer())
+                            
+                    st.success("✅ Terkirim! Menunggu verifikasi Admin.")
                     time.sleep(2); navigasi('Dashboard')
-                else:
-                    st.warning("⚠️ Mohon upload bukti foto terlebih dahulu.")
         else:
-            st.success("Status: BEBAS DENDA. Terima kasih sudah disiplin!")
+            st.success("Status: BEBAS DENDA.")
 
 # --- 6. HALAMAN ADMIN ---
 elif st.session_state.page == 'Admin':
     if st.button("⬅️ Kembali"): navigasi('Dashboard')
     pw = st.text_input("Password Admin:", type="password")
     if pw == "galva123":
-        t1, t2, t3, t4, t5 = st.tabs(["📊 Statistik", "🔔 Verifikasi Penebusan", "📑 Laporan", "📸 Galeri Foto", "⚙️ Reset Data"])
+        t1, t2, t3, t4, t5 = st.tabs(["📊 Statistik", "🔔 Verifikasi", "📑 Laporan", "📸 Galeri", "⚙️ Reset"])
         
-        with t1: # Dashboard Admin
+        with t1:
             c1, c2, c3 = st.columns(3)
             c1.metric("Total Terlambat", len(df_total[df_total['Status'] == 'TERLAMBAT']))
             c2.metric("Hutang Denda", f"Rp {df_total[df_total['Status Denda'] == 'Belum Lunas']['Denda'].sum():,}")
             c3.metric("Uang Masuk", f"Rp {df_total[df_total['Status Denda'].str.contains('Verified', na=False)]['Denda'].sum():,}")
             st.bar_chart(df_total.groupby('Status').size())
 
-        with t2: # Verifikasi
-            # Mencari data yang berstatus Menunggu
+        with t2:
             pending_ids = df_total[df_total['Status Denda'].str.contains("Menunggu", na=False)]['ID_Tebus'].unique()
-            
             if len(pending_ids) > 0:
                 for id_t in pending_ids:
                     if id_t == "": continue
                     row_info = df_total[df_total['ID_Tebus'] == id_t].iloc[0]
-                    with st.expander(f"Penebusan: {row_info['Nama']} ({row_info['Alasan']})"):
-                        # Tampilkan bukti
-                        path_bukti = os.path.join(folder_penebusan, f"{id_t}.jpg")
-                        if os.path.exists(path_bukti):
-                            st.image(path_bukti, width=300)
+                    with st.expander(f"Penebusan: {row_info['Nama']} - {row_info['Alasan']}"):
                         
-                        col_acc, col_rej = st.columns(2)
-                        if col_acc.button("✅ Setujui", key=f"y_{id_t}"):
-                            # Logika: Jika cicilan, Admin harus input manual nominal yang disetujui atau sistem membaca dari alasan
-                            # Untuk mempermudah, kita anggap nominal yang tertulis di 'Alasan' adalah yang disetujui
-                            # Di sini kita ubah status denda menjadi Lunas (Verified)
+                        # TAMPILKAN FOTO BUKTI (BISA 1 ATAU 2 FOTO)
+                        p1 = os.path.join(folder_penebusan, f"{id_t}_1.jpg")
+                        p2 = os.path.join(folder_penebusan, f"{id_t}_2.jpg")
+                        
+                        v_col1, v_col2 = st.columns(2)
+                        if os.path.exists(p1):
+                            cap = "Bukti Pembayaran" if not os.path.exists(p2) else "Foto SEBELUM"
+                            v_col1.image(p1, caption=cap, use_container_width=True)
+                        if os.path.exists(p2):
+                            v_col2.image(p2, caption="Foto SESUDAH", use_container_width=True)
+                        
+                        c_acc, c_rej = st.columns(2)
+                        if c_acc.button("✅ Setujui", key=f"y_{id_t}"):
                             df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = "Lunas (Verified)"
                             df_total.to_excel(excel_file, index=False)
-                            st.success("Disetujui!")
                             st.rerun()
-                        if col_rej.button("❌ Tolak", key=f"n_{id_t}"):
+                        if c_rej.button("❌ Tolak", key=f"n_{id_t}"):
                             df_total.loc[df_total['ID_Tebus'] == id_t, 'Status Denda'] = "Belum Lunas"
-                            df_total.loc[df_total['ID_Tebus'] == id_t, 'ID_Tebus'] = ""
                             df_total.to_excel(excel_file, index=False)
-                            st.error("Ditolak!")
                             st.rerun()
-            else: st.info("Tidak ada antrean verifikasi.")
+            else: st.info("Tidak ada antrean.")
 
-        with t3: # Laporan
+        with t3:
             if not df_total.empty:
                 df_total['Bulan'] = pd.to_datetime(df_total['Tanggal']).dt.strftime('%B %Y')
                 pilih_bulan = st.selectbox("Pilih Bulan:", df_total['Bulan'].unique())
                 df_filt = df_total[df_total['Bulan'] == pilih_bulan]
                 st.dataframe(df_filt)
-                
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     df_filt.to_excel(writer, index=False)
                 st.download_button("📥 Download Excel", output.getvalue(), f"Laporan_{pilih_bulan}.xlsx")
 
-        with t4: # Galeri Foto
+        with t4:
             files = sorted([f for f in os.listdir(folder_foto) if f.endswith('.jpg')], reverse=True)
             cols = st.columns(4)
             for i, f in enumerate(files):
                 cols[i % 4].image(os.path.join(folder_foto, f), caption=f, use_container_width=True)
 
-        with t5: # Reset Data
-            st.warning("⚠️ Perhatian: Tindakan ini menghapus SEMUA data permanen.")
-            if st.button("HAPUS SEMUA DATA & FOTO"):
+        with t5:
+            if st.button("HAPUS SEMUA DATA"):
                 if os.path.exists(excel_file): os.remove(excel_file)
                 for d in [folder_foto, folder_penebusan]:
                     if os.path.exists(d): shutil.rmtree(d)
